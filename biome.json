@@ -19,6 +19,12 @@
 	},
 	"formatter": {},
 	"files": {
-		"ignore": ["vendor", "plugin-repo", "wordpress"]
+		"ignore": [
+			"vendor",
+			"plugin-repo",
+			"wordpress",
+			"live-sandbox-editor/build",
+			"live-sandbox-editor/vendor"
+		]
 	}
 }

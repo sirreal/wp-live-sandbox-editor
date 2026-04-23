@@ -1,0 +1,224 @@
+/* Remove WP admin chrome */
+#wpwrap {
+	overflow: hidden;
+}
+#wpcontent {
+	padding: 0;
+}
+#adminmenuwrap,
+#adminmenuback,
+#wpfooter,
+#wpadminbar {
+	/* display: none; */
+}
+
+/* Top-level layout */
+#live-sandbox-editor-root {
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+	background: #1e1e1e;
+	color: #ccc;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 13px;
+}
+
+.lse-main {
+	display: flex;
+	flex: 1;
+	overflow: hidden;
+}
+
+/* Editor pane: file tree + Monaco */
+.lse-editor-pane {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+}
+
+/* File tree sidebar */
+.lse-file-tree {
+	width: 220px;
+	flex-shrink: 0;
+	background: #252526;
+	border-right: 1px solid #3c3c3c;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.lse-file-tree-header {
+	padding: 8px 12px;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: #bbb;
+	flex-shrink: 0;
+	border-bottom: 1px solid #3c3c3c;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.lse-file-tree-body {
+	flex: 1;
+	overflow-y: auto;
+}
+
+.lse-tree-item {
+	padding: 3px 8px 3px 0;
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.lse-tree-item:hover {
+	background: #2a2d2e;
+}
+.lse-tree-item.selected {
+	background: #094771;
+	color: #fff;
+}
+
+/* Monaco section: tabs + editor */
+.lse-monaco-section {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.lse-tabs {
+	display: flex;
+	background: #252526;
+	border-bottom: 1px solid #3c3c3c;
+	overflow-x: auto;
+	flex-shrink: 0;
+	min-height: 35px;
+}
+
+.lse-tab {
+	padding: 6px 20px 6px 12px;
+	cursor: pointer;
+	color: #969696;
+	border-right: 1px solid #3c3c3c;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	white-space: nowrap;
+	flex-shrink: 0;
+	position: relative;
+}
+
+.lse-tab.active {
+	background: #1e1e1e;
+	color: #fff;
+	border-top: 2px solid #007acc;
+}
+
+.lse-tab-close {
+	font-size: 14px;
+	opacity: 0;
+	width: 16px;
+	text-align: center;
+}
+
+.lse-tab:hover .lse-tab-close {
+	opacity: 1;
+}
+
+.lse-monaco-container {
+	flex: 1;
+}
+
+/* Drag handle */
+.lse-drag-handle {
+	width: 4px;
+	background: #3c3c3c;
+	cursor: col-resize;
+	flex-shrink: 0;
+}
+
+.lse-drag-handle:hover {
+	background: #007acc;
+}
+
+/* Preview pane */
+.lse-preview-pane {
+	width: 40%;
+	min-width: 280px;
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.lse-preview-toolbar {
+	height: 28px;
+	background: #2d2d2d;
+	border-bottom: 1px solid #3c3c3c;
+	display: flex;
+	align-items: center;
+	padding: 0 8px;
+	gap: 8px;
+	font-size: 12px;
+	flex-shrink: 0;
+}
+
+.lse-preview-iframe {
+	flex: 1;
+	border: none;
+	width: 100%;
+}
+
+/* Status bar */
+.lse-status-bar {
+	height: 22px;
+	background: #007acc;
+	color: #fff;
+	font-size: 12px;
+	display: flex;
+	align-items: center;
+	padding: 0 8px;
+	gap: 16px;
+	flex-shrink: 0;
+}
+
+/* Loading overlay */
+.lse-loading {
+	position: fixed;
+	inset: 0;
+	background: rgba(30, 30, 30, 0.92);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	z-index: 100;
+	font-size: 14px;
+}
+
+.lse-loading.hidden {
+	display: none;
+}
+
+.lse-spinner {
+	width: 24px;
+	height: 24px;
+	border: 3px solid #555;
+	border-top-color: #007acc;
+	border-radius: 50%;
+	animation: lse-spin 0.8s linear infinite;
+}
+
+@keyframes lse-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
