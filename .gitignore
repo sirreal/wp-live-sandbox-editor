@@ -1,0 +1,5 @@
+/node_modules/
+/vendor/
+/plugin-repo/
+/wordpress
+*.tsbuildinfo
