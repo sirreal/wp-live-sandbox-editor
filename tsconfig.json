@@ -1,0 +1,13 @@
+{
+	"$schema": "https://json.schemastore.org/tsconfig.json",
+	"extends": ["@tsconfig/strictest/tsconfig"],
+	"compilerOptions": {
+		"checkJs": true,
+		"module": "NodeNext",
+		"rootDir": "live-sandbox-editor",
+		"lib": ["DOM", "DOM.Iterable", "ESNext"],
+		"noEmit": true,
+		"paths": {}
+	},
+	"include": ["html-api-debugger"]
+}
