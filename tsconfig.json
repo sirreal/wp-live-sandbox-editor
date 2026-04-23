@@ -3,11 +3,11 @@
 	"extends": ["@tsconfig/strictest/tsconfig"],
 	"compilerOptions": {
 		"checkJs": true,
-		"module": "NodeNext",
-		"rootDir": "live-sandbox-editor",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
 		"lib": ["DOM", "DOM.Iterable", "ESNext"],
 		"noEmit": true,
 		"paths": {}
 	},
-	"include": ["html-api-debugger"]
+	"include": ["src"]
 }

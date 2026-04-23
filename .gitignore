@@ -1,5 +1,7 @@
 /node_modules/
 /vendor/
+/live-sandbox-editor/build/
+/live-sandbox-editor/vendor/
 /plugin-repo/
 /wordpress
 *.tsbuildinfo

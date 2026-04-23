@@ -1,17 +1,25 @@
 {
 	"$schema": "https://json.schemastore.org/package.json",
-	"name": "live-site-editor",
+	"name": "live-sandbox-editor",
 	"version": "1.0.0",
 	"description": "",
 	"private": true,
 	"scripts": {
-		"build": "zip -r live-site-editor live-site-editor"
+		"dev": "vite",
+		"build": "vite build",
+		"zip": "npm run build && zip -r live-sandbox-editor.zip live-sandbox-editor"
 	},
 	"author": "sirreal",
 	"license": "GPL-2.0",
+	"dependencies": {
+		"@wp-playground/client": "^3.1.20",
+		"monaco-editor": "^0.52.0"
+	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
 		"@tsconfig/strictest": "^2.0.5",
-		"typescript": "npm:@typescript/native-preview@beta"
+		"typescript": "npm:@typescript/native-preview@beta",
+		"vite": "^5.x",
+		"vite-plugin-monaco-editor": "^1.1.0"
 	}
 }

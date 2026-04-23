@@ -16,69 +16,273 @@
 
 namespace Live_Sandbox_Editor;
 
+use FileTreeProducer;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use WP_Error;
 use WP_REST_Request;
-use Exception;
+use WP_REST_Response;
+use WordPress\DataLiberation\MySQLDumpProducer;
 
 const SLUG    = 'live-sandbox-editor';
 const VERSION = '0.1';
 
+/**
+ * Load vendored Reprint classes only if they are not already defined.
+ *
+ * When the Reprint plugin is active it registers its own autoloader for
+ * these classes. Loading our vendor/autoload.php on top would attempt to
+ * redefine them and cause a fatal "Cannot redeclare class" error. We check
+ * for FileTreeProducer (global-namespace) as a sentinel; if it is already
+ * available the rest of the vendored classes will be too.
+ */
+function maybe_load_reprint(): void {
+	if ( class_exists( 'FileTreeProducer' ) ) {
+		return;
+	}
+	$autoload = __DIR__ . '/vendor/autoload.php';
+	if ( file_exists( $autoload ) ) {
+		require_once $autoload;
+	}
+}
+
 /** Set up the plugin. */
-function init() {
+function init(): void {
 	static $done = false;
 	if ( $done ) {
 		return;
 	}
 	$done = true;
 
-	add_action(
-		'rest_api_init',
-		function () {
-			register_rest_route(
-				SLUG . '/v1',
-				'/to-do',
-				array(
-					'methods' => 'GET',
-					'callback' => function ( WP_REST_Request $request ) {
-						return 'Looks good!';
-					},
-					'permission_callback' => fn() => current_user_can( 'update_php' ),
-				)
-			);
-		}
-	);
+	add_action( 'rest_api_init', __NAMESPACE__ . '\\register_rest_routes' );
+	add_action( 'admin_enqueue_scripts', __NAMESPACE__ . '\\enqueue_assets' );
+	add_action( 'admin_menu', __NAMESPACE__ . '\\register_menu' );
+	add_action( 'admin_notices', __NAMESPACE__ . '\\reprint_notice' );
+}
 
-	wp_register_script_module(
-		'@' . SLUG . '/main',
-		plugins_url( 'main.mjs', __FILE__ ),
+/** Enqueue assets on our admin page. */
+function enqueue_assets( string $hook_suffix ): void {
+	if ( $hook_suffix !== 'toplevel_page_' . SLUG ) {
+		return;
+	}
+
+	wp_enqueue_script_module(
+		SLUG,
+		plugins_url( 'build/main.js', __FILE__ ),
 		array(),
 		VERSION
 	);
 
-	add_action(
-		'admin_enqueue_scripts',
-		function ( $hook_suffix ) {
-			if ( $hook_suffix === 'toplevel_page_' . SLUG ) {
-					wp_enqueue_style( SLUG, plugins_url( 'style.css', __FILE__ ), array(), VERSION );
-					wp_enqueue_script_module( '@html-api-debugger/main' );
-			}
+	add_filter(
+		'script_module_data_' . SLUG,
+		function () {
+			return array(
+				'restUrl' => rest_url( SLUG . '/v1' ),
+				'nonce'   => wp_create_nonce( 'wp_rest' ),
+				'siteUrl' => get_site_url(),
+			);
 		}
 	);
 
-	add_action(
-		'admin_menu',
-		function () {
-			add_menu_page(
-				'Live Sandbox Editor',
-				'Live Sandbox Editor',
-				'update_php',
-				SLUG,
-				function () {
-					echo <<<'HTML'
-					<h1>Working</h1>
-					HTML;
-				},
-			);
+	wp_enqueue_style( SLUG, plugins_url( 'style.css', __FILE__ ), array(), VERSION );
+	wp_enqueue_style( SLUG . '-monaco', plugins_url( 'build/main.css', __FILE__ ), array(), VERSION );
+}
+
+/** Register the admin menu page. */
+function register_menu(): void {
+	add_menu_page(
+		'Live Sandbox Editor',
+		'Live Sandbox Editor',
+		'manage_options',
+		SLUG,
+		__NAMESPACE__ . '\\render_page'
+	);
+}
+
+/** Render the admin page. */
+function render_page(): void {
+	echo '<div id="live-sandbox-editor-root"></div>';
+}
+
+/** Show a notice when the vendored Reprint classes are unavailable. */
+function reprint_notice(): void {
+	$screen = get_current_screen();
+	if ( ! $screen || $screen->id !== 'toplevel_page_' . SLUG ) {
+		return;
+	}
+	maybe_load_reprint();
+	if ( class_exists( 'FileTreeProducer' ) ) {
+		return;
+	}
+	echo '<div class="notice notice-error"><p>';
+	esc_html_e( 'Live Sandbox Editor: Reprint classes could not be loaded. Run composer install in the plugin directory.', 'live-sandbox-editor' );
+	echo '</p></div>';
+}
+
+/** Register REST API routes. */
+function register_rest_routes(): void {
+	register_rest_route(
+		SLUG . '/v1',
+		'/reprint-files',
+		array(
+			'methods'             => 'GET',
+			'permission_callback' => fn() => current_user_can( 'manage_options' ),
+			'callback'            => __NAMESPACE__ . '\\rest_reprint_files',
+			'args'                => array(
+				'cursor' => array(
+					'type'              => 'string',
+					'required'          => false,
+					'sanitize_callback' => 'sanitize_text_field',
+				),
+			),
+		)
+	);
+
+	register_rest_route(
+		SLUG . '/v1',
+		'/reprint-db',
+		array(
+			'methods'             => 'GET',
+			'permission_callback' => fn() => current_user_can( 'manage_options' ),
+			'callback'            => __NAMESPACE__ . '\\rest_reprint_db',
+		)
+	);
+}
+
+/**
+ * REST callback: stream wp-content files via FileTreeProducer.
+ *
+ * Returns JSON: { files: { "/wp-content/...": "<base64>" }, nextCursor: string|null }
+ * Iterates at most ~768 KB of file data per request; pass nextCursor back as
+ * ?cursor= to resume. nextCursor is null when the export is complete.
+ *
+ * File contents are base64-encoded so binary assets (images, fonts) survive
+ * JSON transport. The JS layer decodes them to Uint8Array before writing to
+ * the Playground filesystem.
+ */
+function rest_reprint_files( WP_REST_Request $request ): WP_REST_Response|WP_Error {
+	maybe_load_reprint();
+
+	if ( ! class_exists( 'FileTreeProducer' ) ) {
+		return new WP_Error( 'reprint_unavailable', 'Reprint classes not available.', array( 'status' => 503 ) );
+	}
+
+	$wp_content_dir = rtrim( WP_CONTENT_DIR, '/' );
+
+	// Build the full path list that FileTreeProducer requires on every request.
+	// Directory iteration is fast; the producer handles cursor-based positioning.
+	$paths = array();
+	try {
+		$rdi = new RecursiveDirectoryIterator( $wp_content_dir, RecursiveDirectoryIterator::SKIP_DOTS );
+		$rii = new RecursiveIteratorIterator( $rdi, RecursiveIteratorIterator::SELF_FIRST );
+		foreach ( $rii as $file ) {
+			$paths[] = $file->getPathname();
 		}
+	} catch ( \UnexpectedValueException $e ) {
+		return new WP_Error( 'scan_error', $e->getMessage(), array( 'status' => 500 ) );
+	}
+
+	$cursor = $request->get_param( 'cursor' ) ?: null;
+
+	$producer = new FileTreeProducer(
+		$wp_content_dir,
+		array(
+			'paths'      => $paths,
+			// Large chunk size so most WP files are single-chunk; prevents
+			// splitting a file's binary data across two REST responses.
+			'chunk_size' => 8 * 1024 * 1024,
+			'cursor'     => $cursor,
+		)
+	);
+
+	$files         = array();
+	$pending_data  = array(); // path => accumulated raw bytes for multi-chunk files
+	$response_bytes = 0;
+	$limit_bytes   = 768 * 1024; // ~768 KB of file data per response
+
+	while ( $producer->next_chunk() ) {
+		$chunk = $producer->get_current_chunk();
+		if ( ! $chunk || $chunk['type'] !== 'file' ) {
+			continue;
+		}
+
+		// Convert absolute server path → relative wp-content path.
+		$rel = '/wp-content' . substr( $chunk['path'], strlen( $wp_content_dir ) );
+
+		if ( ! isset( $pending_data[ $rel ] ) ) {
+			$pending_data[ $rel ] = '';
+		}
+		$pending_data[ $rel ] .= $chunk['data'];
+
+		if ( $chunk['is_last_chunk'] ) {
+			$files[ $rel ]   = base64_encode( $pending_data[ $rel ] );
+			$response_bytes += strlen( $pending_data[ $rel ] );
+			unset( $pending_data[ $rel ] );
+
+			// Stop at a file boundary once the budget is spent.
+			if ( $response_bytes >= $limit_bytes ) {
+				break;
+			}
+		}
+	}
+
+	// Determine whether there is more data to fetch.
+	$cursor_data = json_decode( $producer->get_reentrancy_cursor(), true );
+	$next_cursor = ( isset( $cursor_data['phase'] ) && 'finished' !== $cursor_data['phase'] )
+		? $producer->get_reentrancy_cursor()
+		: null;
+
+	return new WP_REST_Response(
+		array(
+			'files'      => $files,
+			'nextCursor' => $next_cursor,
+		)
+	);
+}
+
+/**
+ * REST callback: generate a MySQL dump via MySQLDumpProducer.
+ *
+ * Returns the full SQL dump as text/plain. For very large databases this may
+ * be slow; cursor-based pagination can be added later if needed.
+ */
+function rest_reprint_db( WP_REST_Request $request ): WP_REST_Response|WP_Error {
+	maybe_load_reprint();
+
+	if ( ! class_exists( 'WordPress\\DataLiberation\\MySQLDumpProducer' ) ) {
+		return new WP_Error( 'reprint_unavailable', 'Reprint classes not available.', array( 'status' => 503 ) );
+	}
+
+	try {
+		// build_pdo_dsn() is provided by vendor/wp-php-toolkit/reprint-exporter/src/utils.php
+		// via Composer's `files` autoload entry; unavailable to static analysers.
+		if ( function_exists( 'build_pdo_dsn' ) ) {
+			$dsn = build_pdo_dsn( DB_HOST, DB_NAME );
+		} else {
+			// Fallback: simple host:dbname DSN sufficient for most single-host setups.
+			$dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4';
+		}
+		$pdo = new \PDO(
+			$dsn,
+			DB_USER,
+			DB_PASSWORD,
+			array( \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION )
+		);
+	} catch ( \PDOException $e ) {
+		return new WP_Error( 'db_connect', 'Database connection failed: ' . $e->getMessage(), array( 'status' => 500 ) );
+	}
+
+	$producer = new MySQLDumpProducer( $pdo );
+
+	$sql = '';
+	while ( $producer->next_sql_fragment() ) {
+		$sql .= $producer->get_sql_fragment() . "\n";
+	}
+
+	return new WP_REST_Response(
+		$sql,
+		200,
+		array( 'Content-Type' => 'text/plain; charset=utf-8' )
 	);
 }
 

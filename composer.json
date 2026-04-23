@@ -6,6 +6,10 @@
 	"config": {
 		"allow-plugins": {
 			"dealerdirect/phpcodesniffer-composer-installer": true
-		}
+		},
+		"vendor-dir": "live-sandbox-editor/vendor"
+	},
+	"require": {
+		"wp-php-toolkit/reprint-exporter": "^0.1.45"
 	}
 }
