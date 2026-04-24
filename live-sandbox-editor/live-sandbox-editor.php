@@ -70,16 +70,63 @@ function enqueue_assets( string $hook_suffix ): void {
 		return;
 	}
 
+	$worker_handles = array(
+		'editor' => SLUG . '/editor-worker',
+		'json'   => SLUG . '/json-worker',
+		'css'    => SLUG . '/css-worker',
+		'html'   => SLUG . '/html-worker',
+		'ts'     => SLUG . '/ts-worker',
+	);
+
+	foreach ( $worker_handles as $key => $handle ) {
+		wp_register_script_module(
+			$handle,
+			plugins_url( "build/{$key}.worker.js", __FILE__ ),
+			array(),
+			VERSION
+		);
+	}
+
 	wp_enqueue_script_module(
 		SLUG,
 		plugins_url( 'build/main.js', __FILE__ ),
-		array(),
+		array(
+			array(
+				'id' => $worker_handles['editor'],
+				'import' => 'dynamic',
+			),
+			array(
+				'id' => $worker_handles['json'],
+				'import' => 'dynamic',
+			),
+			array(
+				'id' => $worker_handles['css'],
+				'import' => 'dynamic',
+			),
+			array(
+				'id' => $worker_handles['html'],
+				'import' => 'dynamic',
+			),
+			array(
+				'id' => $worker_handles['ts'],
+				'import' => 'dynamic',
+			),
+		),
 		VERSION
 	);
 
 	add_filter(
 		'script_module_data_' . SLUG,
-		function (): array {
+		function () use ( $worker_handles ): array {
+			$worker_urls = array();
+			foreach ( $worker_handles as $key => $handle ) {
+				$worker_urls[ $key ] = add_query_arg(
+					'ver',
+					VERSION,
+					plugins_url( "build/{$key}.worker.js", __FILE__ )
+				);
+			}
+
 			/**
 			 * Sync type with AppData TS interface.
 			 *
@@ -87,12 +134,20 @@ function enqueue_assets( string $hook_suffix ): void {
 			 *                   restUrl: string;
 			 *                   nonce: string;
 			 *                   siteUrl: string;
+			 *                   workerUrls: array{
+			 *                     editor: string;
+			 *                     json: string;
+			 *                     css: string;
+			 *                     html: string;
+			 *                     ts: string;
+			 *                   };
 			 *                 }
 			 */
 			$app_data = array(
-				'restUrl' => rest_url( SLUG . '/v1' ),
-				'nonce'   => wp_create_nonce( 'wp_rest' ),
-				'siteUrl' => get_site_url(),
+				'restUrl'    => rest_url( SLUG . '/v1' ),
+				'nonce'      => wp_create_nonce( 'wp_rest' ),
+				'siteUrl'    => get_site_url(),
+				'workerUrls' => $worker_urls,
 			);
 			return $app_data;
 		}
@@ -209,10 +264,10 @@ function rest_reprint_files( WP_REST_Request $request ): WP_REST_Response|WP_Err
 		)
 	);
 
-	$files         = array();
-	$pending_data  = array(); // path => accumulated raw bytes for multi-chunk files
+	$files          = array();
+	$pending_data   = array(); // path => accumulated raw bytes for multi-chunk files
 	$response_bytes = 0;
-	$limit_bytes   = 768 * 1024; // ~768 KB of file data per response
+	$limit_bytes    = 768 * 1024; // ~768 KB of file data per response
 
 	while ( $producer->next_chunk() ) {
 		$chunk = $producer->get_current_chunk();

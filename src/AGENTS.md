@@ -71,6 +71,6 @@ The only shortcut is Cmd/Ctrl-S, registered inside Monaco via `editor.addCommand
 
 ## Gotchas
 
-- Monaco web workers are wired by `vite-plugin-monaco-editor` at build time. Swapping bundlers requires replicating this.
+- Monaco web workers are wired via `self.MonacoEnvironment.getWorkerUrl` in `editor.ts`. Each worker is a separate Vite entry point (`src/workers/*.ts`) compiled to `build/*.worker.js`, registered as a WordPress script module, declared as a dynamic dependency of the main module, and its URL is passed via `AppData.workerUrls`. Swapping bundlers requires keeping the worker entry points self-contained and updating the PHP registration accordingly.
 - `@wp-playground/client` API evolves fast; always re-check the current `PlaygroundClient` signatures before adding calls.
 - `initPlayground` is imported dynamically (`await import('@wp-playground/client')`) to keep the initial chunk small; preserve that.

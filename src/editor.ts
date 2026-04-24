@@ -1,4 +1,18 @@
 import * as monaco from 'monaco-editor';
+import { getAppData } from './types.js';
+
+self.MonacoEnvironment = {
+	getWorkerUrl(_: string, label: string) {
+		const { workerUrls } = getAppData();
+		if (label === 'json') return workerUrls.json;
+		if (label === 'css' || label === 'scss' || label === 'less')
+			return workerUrls.css;
+		if (label === 'html' || label === 'handlebars' || label === 'razor')
+			return workerUrls.html;
+		if (label === 'typescript' || label === 'javascript') return workerUrls.ts;
+		return workerUrls.editor;
+	},
+};
 
 let editor: monaco.editor.IStandaloneCodeEditor | null = null;
 const models = new Map<string, monaco.editor.ITextModel>();
