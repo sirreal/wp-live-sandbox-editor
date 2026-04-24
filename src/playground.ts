@@ -1,12 +1,14 @@
-import type { PlaygroundClient } from '@wp-playground/client';
+import type { PlaygroundClient, runSql } from '@wp-playground/client';
 import { ensureDir, writeFile } from './filesystem.js';
 import { getAppData } from './types.js';
+
+type RunSql = typeof runSql;
 
 export async function initPlayground(
 	iframe: HTMLIFrameElement,
 	onStatus: (status: string) => void,
 ): Promise<PlaygroundClient> {
-	const { startPlaygroundWeb } = await import('@wp-playground/client');
+	const { startPlaygroundWeb, runSql } = await import('@wp-playground/client');
 
 	onStatus('Booting Playground…');
 	const client = await startPlaygroundWeb({
@@ -23,7 +25,7 @@ export async function initPlayground(
 
 	if (filesOk) {
 		onStatus('Importing database…');
-		await importReprintDb(client);
+		await importReprintDb(client, runSql);
 
 		onStatus('Fixing site URL…');
 		await fixSiteUrl(client);
@@ -90,7 +92,10 @@ async function importReprintFiles(client: PlaygroundClient): Promise<boolean> {
 	return true;
 }
 
-async function importReprintDb(client: PlaygroundClient): Promise<void> {
+async function importReprintDb(
+	client: PlaygroundClient,
+	runSql: RunSql,
+): Promise<void> {
 	const { restUrl, nonce } = getAppData();
 	const res = await fetch(`${restUrl}/reprint-db`, {
 		headers: { 'X-WP-Nonce': nonce },
@@ -111,44 +116,10 @@ async function importReprintDb(client: PlaygroundClient): Promise<void> {
 		return;
 	}
 
-	const sql = await res.text();
-	const docroot = await client.documentRoot;
-	const sqlPath = '/tmp/live-sandbox-import.sql';
-
-	await writeFile(client, sqlPath, sql);
-
-    const result = await client.run({
-		code: String.raw`<?php
-        require_once '${docroot}/wp-load.php';
-        global $wpdb;
-        $sql = file_get_contents('${sqlPath}');
-        // MySQL dumps terminate each statement with ";\n".
-        // Splitting on that avoids false splits on semicolons inside string values.
-        // $statements = preg_split('/;[ \\t]*(?:\\r\\n|\\n)/', $sql);
-        $statements = preg_split('/;$/m', $sql);
-        $errors = [];
-        foreach ($statements as $statement) {
-            $statement = trim($statement);
-            // Skip blank lines and SQL comment lines (-- style).
-            if ($statement === '' || str_starts_with($statement, '--')) {
-                continue;
-            }
-            if (false === $wpdb->query($statement)) {
-                $errors[] = $wpdb->last_error . ': ' . substr($statement, 0, 120);
-            }
-        }
-        if ($errors) {
-            echo implode("\\n", array_slice($errors, 0, 20));
-        }
-    `,
+	const sqlFile = new File([await res.blob()], 'reprint-import.sql', {
+		type: 'application/sql',
 	});
-
-	if (result.text?.trim()) {
-		console.warn(
-			'[live-sandbox-editor] DB import warnings:\n',
-			result.text.trim(),
-		);
-	}
+	await runSql(client, { sql: sqlFile });
 }
 
 async function fixSiteUrl(client: PlaygroundClient): Promise<void> {
