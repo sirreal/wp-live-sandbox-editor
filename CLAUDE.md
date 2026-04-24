@@ -5,7 +5,7 @@ WordPress plugin that renders a Monaco editor + WordPress Playground sandbox in 
 ## Project layout
 
 - Plugin source: `live-sandbox-editor/` (subdirectory, not root)
-- JS source: `src/` → built to `live-sandbox-editor/main.js` via Vite
+- JS source: `src/` → built to `live-sandbox-editor/build/` via Vite
 - WordPress symlinked at `wordpress/`
 
 ## Build
@@ -15,7 +15,7 @@ WordPress plugin that renders a Monaco editor + WordPress Playground sandbox in 
 
 ## Key dependencies
 
-- Monaco: `@monaco-editor/react` + `vite-plugin-monaco-editor`
+- Monaco: `monaco-editor` + `vite-plugin-monaco-editor`
 - Playground: `@wp-playground/client` (verify package name before install)
 - Site snapshot: depends on **Reprint exporter plugin** active on the live site
 
@@ -24,8 +24,9 @@ WordPress plugin that renders a Monaco editor + WordPress Playground sandbox in 
 Biome (`biome.json`): single quotes, recommended rules. Run: `npx biome check .`
 PHP: WPCS via phpcs (`phpcs.xml`). Namespace: `Live_Sandbox_Editor`, slug: `live-sandbox-editor`.
 
-## Known leftover cleanup (from html-api-debugger copy)
+## Script modules
 
-- `tsconfig.json` `include` should be `["src"]`
-- `composer.json` name should be `sirreal/live-sandbox-editor`
-- `package.json` name should be `live-sandbox-editor`
+JS is loaded as an ES module via `wp_enqueue_script_module()`. Data is passed with
+`add_filter('script_module_data_' . SLUG, fn() => [...])` and read in JS from
+`document.getElementById('wp-script-module-data-live-sandbox-editor')`.
+`wp_localize_script` does not work for modules.
