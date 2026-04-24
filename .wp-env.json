@@ -1,6 +1,12 @@
 {
-	"plugins": [
-		"./live-sandbox-editor"
-	],
-	"testsEnvironment": false
+  "config": {
+    "WP_DEBUG": true,
+    "WP_DEBUG_DISPLAY": true,
+    "SCRIPT_DEBUG": true,
+    "WP_DEBUG_LOG": "/var/www/html/wp-content/debug.log"
+  },
+  "plugins": [
+    "./live-sandbox-editor"
+  ],
+  "testsEnvironment": false
 }
