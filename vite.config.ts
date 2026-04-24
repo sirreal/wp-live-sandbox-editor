@@ -2,6 +2,7 @@ import monacoEditorPlugin from 'vite-plugin-monaco-editor';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+	base: './',
 	plugins: [
 		monacoEditorPlugin({
 			languageWorkers: [
