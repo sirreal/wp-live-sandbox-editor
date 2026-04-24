@@ -117,29 +117,29 @@ async function importReprintDb(client: PlaygroundClient): Promise<void> {
 
 	await writeFile(client, sqlPath, sql);
 
-	const result = await client.run({
-		code: `<?php
-			require_once '${docroot}/wp-load.php';
-			global $wpdb;
-			$sql = file_get_contents('${sqlPath}');
-			// MySQL dumps terminate each statement with ";\n".
-			// Splitting on that avoids false splits on semicolons inside string values.
-			$statements = preg_split('/;[ \\t]*(?:\\r\\n|\\n)/', $sql);
-			$errors = [];
-			foreach ($statements as $statement) {
-				$statement = trim($statement);
-				// Skip blank lines and SQL comment lines (-- style).
-				if ($statement === '' || str_starts_with($statement, '--')) {
-					continue;
-				}
-				if (false === $wpdb->query($statement)) {
-					$errors[] = $wpdb->last_error . ': ' . substr($statement, 0, 120);
-				}
-			}
-			if ($errors) {
-				echo implode("\\n", array_slice($errors, 0, 20));
-			}
-		`,
+    const result = await client.run({
+		code: String.raw`<?php
+        require_once '${docroot}/wp-load.php';
+        global $wpdb;
+        $sql = file_get_contents('${sqlPath}');
+        // MySQL dumps terminate each statement with ";\n".
+        // Splitting on that avoids false splits on semicolons inside string values.
+        $statements = preg_split('/;[ \\t]*(?:\\r\\n|\\n)/', $sql);
+        $errors = [];
+        foreach ($statements as $statement) {
+            $statement = trim($statement);
+            // Skip blank lines and SQL comment lines (-- style).
+            if ($statement === '' || str_starts_with($statement, '--')) {
+                continue;
+            }
+            if (false === $wpdb->query($statement)) {
+                $errors[] = $wpdb->last_error . ': ' . substr($statement, 0, 120);
+            }
+        }
+        if ($errors) {
+            echo implode("\\n", array_slice($errors, 0, 20));
+        }
+    `,
 	});
 
 	if (result.text?.trim()) {
