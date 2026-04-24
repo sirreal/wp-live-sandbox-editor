@@ -1,0 +1,6 @@
+{
+	"name": "sirreal/live-sandbox-editor-plugin",
+	"require": {
+		"wp-php-toolkit/reprint-exporter": "^0.1.45"
+	}
+}
