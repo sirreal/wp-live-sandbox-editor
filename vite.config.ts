@@ -1,19 +1,7 @@
-import monacoEditorPlugin from 'vite-plugin-monaco-editor';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
 	base: './',
-	plugins: [
-		monacoEditorPlugin({
-			languageWorkers: [
-				'editorWorkerService',
-				'typescript',
-				'css',
-				'json',
-				'html',
-			],
-		}),
-	],
 	server: {
 		watch: {
 			// `.claude/worktrees/**` holds full git worktree copies of this
