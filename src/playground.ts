@@ -117,19 +117,37 @@ async function importReprintDb(client: PlaygroundClient): Promise<void> {
 
 	await writeFile(client, sqlPath, sql);
 
-	await client.run({
+	const result = await client.run({
 		code: `<?php
-			require('${docroot}/wp-load.php');
+			require_once '${docroot}/wp-load.php';
 			global $wpdb;
 			$sql = file_get_contents('${sqlPath}');
-			$statements = array_filter(array_map('trim', explode(';', $sql)));
+			// MySQL dumps terminate each statement with ";\n".
+			// Splitting on that avoids false splits on semicolons inside string values.
+			$statements = preg_split('/;[ \\t]*(?:\\r\\n|\\n)/', $sql);
+			$errors = [];
 			foreach ($statements as $statement) {
-				if ($statement !== '') {
-					$wpdb->query($statement);
+				$statement = trim($statement);
+				// Skip blank lines and SQL comment lines (-- style).
+				if ($statement === '' || str_starts_with($statement, '--')) {
+					continue;
 				}
+				if (false === $wpdb->query($statement)) {
+					$errors[] = $wpdb->last_error . ': ' . substr($statement, 0, 120);
+				}
+			}
+			if ($errors) {
+				echo implode("\\n", array_slice($errors, 0, 20));
 			}
 		`,
 	});
+
+	if (result.text?.trim()) {
+		console.warn(
+			'[live-sandbox-editor] DB import warnings:\n',
+			result.text.trim(),
+		);
+	}
 }
 
 async function fixSiteUrl(client: PlaygroundClient): Promise<void> {
