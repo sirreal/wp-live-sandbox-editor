@@ -1,15 +1,15 @@
-import type { PlaygroundClient, runSql } from '@wp-playground/client';
+import {
+	type PlaygroundClient,
+	startPlaygroundWeb,
+} from '@wp-playground/client';
+import { runSql } from '@wp-playground/blueprints';
 import { ensureDir, writeFile } from './filesystem.js';
 import { getAppData } from './types.js';
-
-type RunSql = typeof runSql;
 
 export async function initPlayground(
 	iframe: HTMLIFrameElement,
 	onStatus: (status: string) => void,
 ): Promise<PlaygroundClient> {
-	const { startPlaygroundWeb, runSql } = await import('@wp-playground/client');
-
 	onStatus('Booting Playground…');
 	const client = await startPlaygroundWeb({
 		iframe,
@@ -25,7 +25,7 @@ export async function initPlayground(
 
 	if (filesOk) {
 		onStatus('Importing database…');
-		await importReprintDb(client, runSql);
+		await importReprintDb(client);
 
 		onStatus('Fixing site URL…');
 		await fixSiteUrl(client);
@@ -92,10 +92,7 @@ async function importReprintFiles(client: PlaygroundClient): Promise<boolean> {
 	return true;
 }
 
-async function importReprintDb(
-	client: PlaygroundClient,
-	runSql: RunSql,
-): Promise<void> {
+async function importReprintDb(client: PlaygroundClient): Promise<void> {
 	const { restUrl, nonce } = getAppData();
 	const res = await fetch(`${restUrl}/reprint-db`, {
 		headers: { 'X-WP-Nonce': nonce },
