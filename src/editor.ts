@@ -18,15 +18,21 @@ export function initEditor(
 	return editor;
 }
 
-export function openInEditor(path: string, content: string): void {
-	if (!editor) return;
+export function loadFileIntoEditor(path: string, content: string): void {
+	if (models.has(path)) return;
 	const uri = monaco.Uri.parse('file://' + path);
-	let model = models.get(path);
-	if (!model) {
-		model = monaco.editor.createModel(content, detectLanguage(path), uri);
-		models.set(path, model);
+	const model = monaco.editor.createModel(content, detectLanguage(path), uri);
+	models.set(path, model);
+}
+
+export function showInEditor(path: string | null): void {
+	if (!editor) return;
+	if (path === null) {
+		editor.setModel(null);
+		return;
 	}
-	editor.setModel(model);
+	const model = models.get(path);
+	if (model) editor.setModel(model);
 }
 
 export function getCurrentPath(): string | null {

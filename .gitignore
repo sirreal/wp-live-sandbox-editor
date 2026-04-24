@@ -5,3 +5,6 @@
 /plugin-repo/
 /wordpress
 *.tsbuildinfo
+
+# Used by agents during Playwright-driven debug sessions.
+.playwright-mcp

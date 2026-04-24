@@ -1,5 +1,10 @@
 import type { PlaygroundClient } from '@wp-playground/client';
-import { addSaveCommand, initEditor, openInEditor } from './editor.js';
+import {
+	addSaveCommand,
+	initEditor,
+	loadFileIntoEditor,
+	showInEditor,
+} from './editor.js';
 import { initFileExplorer } from './file-explorer.js';
 import { readFile, writeFile } from './filesystem.js';
 import { initPlayground } from './playground.js';
@@ -99,6 +104,7 @@ export async function initApp(root: HTMLElement): Promise<void> {
 
 	function activateTab(path: string): void {
 		activeTab = path;
+		showInEditor(path);
 		renderTabs();
 	}
 
@@ -107,6 +113,7 @@ export async function initApp(root: HTMLElement): Promise<void> {
 		openTabs.splice(idx, 1);
 		if (activeTab === path) {
 			activeTab = openTabs[idx]?.path ?? openTabs[idx - 1]?.path ?? null;
+			showInEditor(activeTab);
 		}
 		renderTabs();
 	}
@@ -142,7 +149,7 @@ export async function initApp(root: HTMLElement): Promise<void> {
 		if (!existingTab) {
 			const content = await readFile(client, filePath);
 			openTabs.push({ path: filePath, label });
-			openInEditor(filePath, content);
+			loadFileIntoEditor(filePath, content);
 		}
 
 		activateTab(filePath);
