@@ -60,7 +60,11 @@ function init(): void {
 	add_action( 'admin_notices', __NAMESPACE__ . '\\reprint_notice' );
 }
 
-/** Enqueue assets on our admin page. */
+/**
+ * Enqueue assets on our admin page.
+ *
+ * @param string $hook_suffix Current hook suffix.
+ */
 function enqueue_assets( string $hook_suffix ): void {
 	if ( $hook_suffix !== 'toplevel_page_' . SLUG ) {
 		return;
@@ -75,12 +79,22 @@ function enqueue_assets( string $hook_suffix ): void {
 
 	add_filter(
 		'script_module_data_' . SLUG,
-		function () {
-			return array(
+		function (): array {
+			/**
+			 * Sync type with AppData TS interface.
+			 *
+			 * @phpstan-var array{
+			 *                   restUrl: string;
+			 *                   nonce: string;
+			 *                   siteUrl: string;
+			 *                 }
+			 */
+			$app_data = array(
 				'restUrl' => rest_url( SLUG . '/v1' ),
 				'nonce'   => wp_create_nonce( 'wp_rest' ),
 				'siteUrl' => get_site_url(),
 			);
+			return $app_data;
 		}
 	);
 
