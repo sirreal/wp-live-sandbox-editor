@@ -25,6 +25,7 @@ export default defineConfig({
 	build: {
 		outDir: 'live-sandbox-editor/build',
 		emptyOutDir: true,
+		sourcemap: true,
 		rollupOptions: {
 			input: 'src/main.ts',
 			output: {

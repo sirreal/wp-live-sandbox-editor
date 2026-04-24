@@ -7,6 +7,7 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",
+		"watch": "vite build --watch",
 		"zip": "npm run build && zip -r live-sandbox-editor.zip live-sandbox-editor"
 	},
 	"author": "sirreal",
