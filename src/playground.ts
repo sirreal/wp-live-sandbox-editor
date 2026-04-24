@@ -124,7 +124,8 @@ async function importReprintDb(client: PlaygroundClient): Promise<void> {
         $sql = file_get_contents('${sqlPath}');
         // MySQL dumps terminate each statement with ";\n".
         // Splitting on that avoids false splits on semicolons inside string values.
-        $statements = preg_split('/;[ \\t]*(?:\\r\\n|\\n)/', $sql);
+        // $statements = preg_split('/;[ \\t]*(?:\\r\\n|\\n)/', $sql);
+        $statements = preg_split('/;$/m', $sql);
         $errors = [];
         foreach ($statements as $statement) {
             $statement = trim($statement);
