@@ -23,6 +23,13 @@ export interface AppData {
 	restUrl: string;
 	nonce: string;
 	siteUrl: string;
+	workerUrls: {
+		editor: string;
+		json: string;
+		css: string;
+		html: string;
+		ts: string;
+	};
 }
 
 export function getAppData(): AppData {
