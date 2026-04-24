@@ -2,6 +2,11 @@ import type { PlaygroundClient } from '@wp-playground/client';
 import { ensureDir, writeFile } from './filesystem.js';
 import { getAppData } from './types.js';
 
+async function getErrorResponseText(res: Response): Promise<string | null> {
+	const text = (await res.text()).trim();
+	return text ? text : null;
+}
+
 export async function initPlayground(
 	iframe: HTMLIFrameElement,
 	onStatus: (status: string) => void,
@@ -62,9 +67,11 @@ async function importReprintFiles(client: PlaygroundClient): Promise<boolean> {
 		}
 
 		if (!res.ok) {
+			const errorText = await getErrorResponseText(res);
 			console.error(
 				'[live-sandbox-editor] Reprint file import failed:',
 				res.status,
+				errorText ?? '',
 			);
 			return false;
 		}
@@ -104,9 +111,11 @@ async function importReprintDb(client: PlaygroundClient): Promise<void> {
 	}
 
 	if (!res.ok) {
+		const errorText = await getErrorResponseText(res);
 		console.error(
 			'[live-sandbox-editor] Reprint DB import failed:',
 			res.status,
+			errorText ?? '',
 		);
 		return;
 	}
@@ -117,7 +126,7 @@ async function importReprintDb(client: PlaygroundClient): Promise<void> {
 
 	await writeFile(client, sqlPath, sql);
 
-    const result = await client.run({
+	const result = await client.run({
 		code: String.raw`<?php
         require_once '${docroot}/wp-load.php';
         global $wpdb;
