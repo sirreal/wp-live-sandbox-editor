@@ -1,0 +1,5 @@
+{
+	"plugins": [
+		"./live-sandbox-editor"
+	]
+}
