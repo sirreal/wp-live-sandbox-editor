@@ -21,5 +21,9 @@
 		"typescript": "npm:@typescript/native-preview@beta",
 		"vite": "^5.x",
 		"vite-plugin-monaco-editor": "^1.1.0"
+	},
+	"volta": {
+		"node": "22.22.2",
+		"npm": "11.13.0"
 	}
 }
