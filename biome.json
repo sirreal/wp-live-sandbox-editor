@@ -20,6 +20,7 @@
 	"formatter": {},
 	"files": {
 		"ignore": [
+			".claude",
 			"vendor",
 			"plugin-repo",
 			"wordpress",
