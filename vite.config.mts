@@ -1,25 +1,7 @@
 import { defineConfig } from 'vite';
-import monacoEditorPluginPkg from 'vite-plugin-monaco-editor';
-
-// `vite-plugin-monaco-editor` is published as CJS with `exports.default`;
-// under ESM the default import resolves to the namespace, not the function.
-const monacoEditorPlugin = (
-	monacoEditorPluginPkg as unknown as { default: typeof monacoEditorPluginPkg }
-).default;
 
 export default defineConfig({
 	base: './',
-	plugins: [
-		monacoEditorPlugin({
-			languageWorkers: [
-				'editorWorkerService',
-				'typescript',
-				'css',
-				'json',
-				'html',
-			],
-		}),
-	],
 	server: {
 		watch: {
 			// `.claude/worktrees/**` holds full git worktree copies of this
@@ -33,9 +15,16 @@ export default defineConfig({
 		emptyOutDir: true,
 		sourcemap: true,
 		rollupOptions: {
-			input: 'src/main.ts',
+			input: {
+				main: 'src/main.ts',
+				'editor.worker': 'src/workers/editor.worker.ts',
+				'json.worker': 'src/workers/json.worker.ts',
+				'css.worker': 'src/workers/css.worker.ts',
+				'html.worker': 'src/workers/html.worker.ts',
+				'ts.worker': 'src/workers/ts.worker.ts',
+			},
 			output: {
-				entryFileNames: 'main.js',
+				entryFileNames: '[name].js',
 				chunkFileNames: '[name]-[hash].js',
 				assetFileNames: '[name][extname]',
 			},
