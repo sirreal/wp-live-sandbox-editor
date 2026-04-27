@@ -28,7 +28,7 @@ export async function initPlayground(
 	});
 
 	onStatus('Importing site files…');
-	const filesOk = true || (await importReprintFiles(client));
+	const filesOk = await importReprintFiles(client);
 
 	if (filesOk) {
 		onStatus('Importing database…');
