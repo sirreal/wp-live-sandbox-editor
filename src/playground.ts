@@ -6,6 +6,15 @@ import { runSql } from '@wp-playground/blueprints';
 import { ensureDir, writeFile } from './filesystem.js';
 import { getAppData } from './types.js';
 
+async function getErrorResponseText(res: Response): Promise<string | null> {
+	try {
+		const text = (await res.text()).trim();
+		return text ? text : null;
+	} catch {
+		return null;
+	}
+}
+
 export async function initPlayground(
 	iframe: HTMLIFrameElement,
 	onStatus: (status: string) => void,
@@ -64,9 +73,11 @@ async function importReprintFiles(client: PlaygroundClient): Promise<boolean> {
 		}
 
 		if (!res.ok) {
+			const errorText = await getErrorResponseText(res);
 			console.error(
 				'[live-sandbox-editor] Reprint file import failed:',
 				res.status,
+				errorText ?? '',
 			);
 			return false;
 		}
@@ -106,9 +117,11 @@ async function importReprintDb(client: PlaygroundClient): Promise<void> {
 	}
 
 	if (!res.ok) {
+		const errorText = await getErrorResponseText(res);
 		console.error(
 			'[live-sandbox-editor] Reprint DB import failed:',
 			res.status,
+			errorText ?? '',
 		);
 		return;
 	}
