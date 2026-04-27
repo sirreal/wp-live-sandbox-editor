@@ -1,8 +1,4 @@
-import { runSql } from '@wp-playground/blueprints';
-import {
-	type PlaygroundClient,
-	startPlaygroundWeb,
-} from '@wp-playground/client';
+import type { PlaygroundClient } from '@wp-playground/client';
 import { ensureDir, writeFile } from './filesystem.js';
 import { getAppData } from './types.js';
 
@@ -26,6 +22,7 @@ export async function initPlayground(
 	debug: DebugSettings,
 ): Promise<PlaygroundClient> {
 	const debugMode = debug.scriptDebug || debug.wpDebug;
+	const { startPlaygroundWeb } = await import('@wp-playground/client');
 
 	onStatus('Booting Playground…');
 	const client = await startPlaygroundWeb({
@@ -209,8 +206,9 @@ async function importReprintDb(
 	const sqlBytes = base64ToBytes(b64);
 
 	if (debugMode) {
-		await runSqlVerbose(client, sqlBytes);
+		await runSqlVerbose(client, b64);
 	} else {
+		const { runSql } = await import('@wp-playground/blueprints');
 		const sqlFile = new File([sqlBytes], 'reprint-import.sql', {
 			type: 'application/sql',
 		});
@@ -227,28 +225,33 @@ async function importReprintDb(
  * This loop does the same per-statement execution but records and returns
  * the first N failures so we can see them in the console.
  *
- * The statement splitter is intentionally tiny: Reprint dumps only emit
- * single-quoted string literals inside `FROM_BASE64('…')` (base64 alphabet
- * has no `'`, `;`, or `\n`), so a state machine that toggles on `'` and cuts
- * on `;` is enough. Standard SQL `''` escape is handled too.
+ * The splitter handles `--` line comments and `/* …` block comments before
+ * applying the in-string state machine, so an apostrophe inside a comment
+ * (e.g. `-- Dumping data for table 'foo'`) doesn't flip parsing state. The
+ * in-string machine itself only recognises single-quoted literals (with
+ * SQL `''` escape) — this matches Reprint's output, which wraps every
+ * non-numeric column in `FROM_BASE64('…')` and never emits double-quoted
+ * strings or backslash escapes. If the producer ever changes shape, audit
+ * this splitter.
+ *
+ * The base64 payload is embedded directly in the PHP snippet (via
+ * `JSON.stringify`, safe because base64 contains no characters that need
+ * JSON escaping) and decoded server-side, so no temp file is required.
  */
 async function runSqlVerbose(
 	client: PlaygroundClient,
-	sqlBytes: Uint8Array,
+	sqlBase64: string,
 ): Promise<void> {
 	const docroot = await client.documentRoot;
-	const sqlPath = '/tmp/lse-import.sql';
-	await writeFile(client, sqlPath, sqlBytes);
 
 	const result = await client.run({
 		code: `<?php
-			define('WP_SQLITE_AST_DRIVER', true);
 			require_once '${docroot}/wp-load.php';
 			global $wpdb;
 			$wpdb->suppress_errors();
 			$wpdb->hide_errors();
 
-			$sql = file_get_contents(${JSON.stringify(sqlPath)});
+			$sql = base64_decode(${JSON.stringify(sqlBase64)});
 			$len = strlen($sql);
 			$i = 0;
 			$start = 0;
@@ -279,6 +282,18 @@ async function runSqlVerbose(
 			while ($i < $len) {
 				$c = $sql[$i];
 				if (!$in_str) {
+					// Skip '--' line comments to end-of-line.
+					if ($c === '-' && $i + 1 < $len && $sql[$i + 1] === '-') {
+						$nl = strpos($sql, "\\n", $i);
+						$i = ($nl === false) ? $len : $nl + 1;
+						continue;
+					}
+					// Skip /* ... */ block comments.
+					if ($c === '/' && $i + 1 < $len && $sql[$i + 1] === '*') {
+						$end = strpos($sql, '*/', $i + 2);
+						$i = ($end === false) ? $len : $end + 2;
+						continue;
+					}
 					if ($c === "'") {
 						$in_str = true;
 					} elseif ($c === ';') {

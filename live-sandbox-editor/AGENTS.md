@@ -18,7 +18,7 @@ Frontend source is in `src/` at the repo root — see `../src/CLAUDE.md`.
 Two routes live under `live-sandbox-editor/v1`, both gated by `current_user_can('manage_options')`, both return 503 when Reprint classes are missing:
 
 - `GET /reprint-files?cursor=…` — cursor-paginated `wp-content` stream via `FileTreeProducer`. JSON `{ files, nextCursor }`, base64 values, ~768 KB budget per response.
-- `GET /reprint-db` — full MySQL dump as `text/plain` via `MySQLDumpProducer`. Not paginated today; if you add pagination, use the producer's statement-bounded `next_sql_fragment()` API (it sidesteps the JS split regex).
+- `GET /reprint-db` — full MySQL dump via `MySQLDumpProducer`, base64-encoded and returned as a JSON string literal (WP REST JSON-encodes the body regardless of `Content-Type`, so the dump must be base64 to survive intact). Not paginated today; if you add pagination, use the producer's statement-bounded `next_sql_fragment()` API.
 
 The only camelCase JSON field in a REST response today is `nextCursor`. Match that style when adding new fields.
 

@@ -35,7 +35,7 @@ Boots Playground and populates its VFS with the host site:
    ```
    Remove the `login` step to land the user logged-out. `steps` accepts any Playground blueprint step; see `@wp-playground/client` types.
 2. Pull `/wp-content` via `GET {restUrl}/reprint-files?cursor=…` (base64 → `Uint8Array` → `writeFile`, looped on opaque cursor).
-3. Pull DB via `GET {restUrl}/reprint-db`, write to `/tmp/live-sandbox-import.sql`, execute statement-by-statement inside Playground.
+3. Pull DB via `GET {restUrl}/reprint-db` (base64-encoded JSON string), decode to `Uint8Array`, hand to `runSql` from `@wp-playground/blueprints`. With `WP_DEBUG`/`SCRIPT_DEBUG`, swap in the local `runSqlVerbose` for per-statement error reporting (writes to `/tmp/lse-import.sql`).
 4. `update_option('siteurl'|'home', …)` with the Playground URL so internal links resolve.
 
 503 from either route means Reprint classes are missing on the host — the pipeline logs and continues without import. Don't hard-fail.

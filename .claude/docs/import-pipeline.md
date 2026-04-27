@@ -36,27 +36,24 @@ do {
 
 ## `GET /reprint-db`
 
-Full MySQL dump via `MySQLDumpProducer` as **`text/plain`** (not JSON).
+Full MySQL dump via `MySQLDumpProducer`, **base64-encoded** and returned as a JSON string literal.
 
 - DSN: `build_pdo_dsn()` from the Reprint `files` autoload if present, else fallback `mysql:host=…;dbname=…;charset=utf8mb4`.
 - No pagination today.
-- `MySQLDumpProducer` exposes `next_sql_fragment()` / `get_sql_fragment()`, which return **statement-bounded** fragments (not raw byte chunks). If you add a cursor, accumulate fragments until a byte budget, flush, and reuse the producer's re-entrancy mechanism. That sidesteps the JS split regex entirely.
-- SQL is UTF-8 and stays **unencoded** in the response — do not base64 it. Base64 on `/reprint-files` exists only for binary safety.
+- `MySQLDumpProducer` exposes `next_sql_fragment()` / `get_sql_fragment()`, which return **statement-bounded** fragments (not raw byte chunks). If you add a cursor, accumulate fragments until a byte budget, flush, and reuse the producer's re-entrancy mechanism.
+- **Base64 is mandatory.** WP REST always JSON-encodes the response body regardless of the `Content-Type` header, and JSON encoding mangles raw SQL (newlines, embedded quotes, `\u` sequences in string literals). Wrapping the dump in base64 round-trips losslessly through the JSON envelope. Do not "optimise" this away by changing the transport.
 
-JS side runs the dump statement-by-statement inside Playground:
+JS side hands the decoded bytes to `runSql` from `@wp-playground/blueprints`:
 ```ts
-await writeFile(client, '/tmp/live-sandbox-import.sql', sql);
-await client.run({ code: `<?php
-  require_once '${docroot}/wp-load.php';
-  global $wpdb;
-  $statements = preg_split('/;[ \\t]*(?:\\r\\n|\\n)/', file_get_contents('${sqlPath}'));
-  foreach ($statements as $s) { if (trim($s) !== '' && !str_starts_with(trim($s), '--')) $wpdb->query($s); }
-`});
+const b64 = (await res.json()) as string;
+const sqlBytes = base64ToBytes(b64);
+const sqlFile = new File([sqlBytes], 'reprint-import.sql', { type: 'application/sql' });
+await runSql(client, { sql: sqlFile });
 ```
 
-The split regex `/;[ \t]*(?:\r\n|\n)/` is load-bearing: naïve splits on `;` break on semicolons inside string literals. Do **not** simplify it.
+`runSql` swallows per-statement failures (it loops `$wpdb->query($q)` and never inspects `last_error`). When `WP_DEBUG` or `SCRIPT_DEBUG` is on, `playground.ts` swaps in `runSqlVerbose`, which executes statements one-by-one and surfaces the first 20 failures to the console. The verbose path uses a hand-rolled splitter that's only correct for Reprint's output (single-quoted `FROM_BASE64('…')` literals — base64 alphabet contains no `'`, `;`, or `\n`); it is **not** a general-purpose SQL splitter.
 
-Pagination is not implemented; `MySQLDumpProducer::next_sql_fragment()` returns statement-bounded fragments, which would make cursor-style chunking straightforward if ever needed. Changing the wire format is an ask-before change — the current `text/plain` contract has no version marker.
+Pagination is not implemented; `MySQLDumpProducer::next_sql_fragment()` returns statement-bounded fragments, which would make cursor-style chunking straightforward if ever needed. Changing the wire format (e.g. dropping base64, switching to chunked streaming) is an ask-before change — the current contract has no version marker.
 
 ## Post-import step
 
