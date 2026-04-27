@@ -87,12 +87,16 @@ function enqueue_assets( string $hook_suffix ): void {
 			 *                   restUrl: string;
 			 *                   nonce: string;
 			 *                   siteUrl: string;
+			 *                   scriptDebug: bool;
+			 *                   wpDebug: bool;
 			 *                 }
 			 */
 			$app_data = array(
-				'restUrl' => rest_url( SLUG . '/v1' ),
-				'nonce'   => wp_create_nonce( 'wp_rest' ),
-				'siteUrl' => get_site_url(),
+				'restUrl'     => rest_url( SLUG . '/v1' ),
+				'nonce'       => wp_create_nonce( 'wp_rest' ),
+				'siteUrl'     => get_site_url(),
+				'scriptDebug' => defined( 'SCRIPT_DEBUG' ) && constant( 'SCRIPT_DEBUG' ),
+				'wpDebug'     => defined( 'WP_DEBUG' ) && constant( 'WP_DEBUG' ),
 			);
 			return $app_data;
 		}
@@ -293,8 +297,9 @@ function rest_reprint_db( WP_REST_Request $request ): WP_REST_Response|WP_Error 
 		$sql .= $producer->get_sql_fragment() . "\n";
 	}
 
+	// Return the SQL as base64 to avoid mangling during the JSON-encoding.
 	return new WP_REST_Response(
-		$sql,
+		base64_encode( $sql ),
 		200,
 		array( 'Content-Type' => 'text/plain; charset=utf-8' )
 	);

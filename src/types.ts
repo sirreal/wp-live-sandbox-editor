@@ -23,6 +23,8 @@ export interface AppData {
 	restUrl: string;
 	nonce: string;
 	siteUrl: string;
+	scriptDebug: boolean;
+	wpDebug: boolean;
 }
 
 export function getAppData(): AppData {
