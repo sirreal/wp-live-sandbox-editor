@@ -269,9 +269,10 @@ function rest_reprint_files( WP_REST_Request $request ): WP_REST_Response|WP_Err
 /**
  * REST callback: generate a MySQL dump via MySQLDumpProducer.
  *
- * Returns the full SQL dump base64-encoded inside a JSON string body so the
- * raw bytes survive WP REST's JSON envelope intact. For very large databases
- * this may be slow; cursor-based pagination can be added later if needed.
+ * Returns the full SQL dump as a JSON-encoded string body (WP REST always
+ * JSON-encodes the response, so the JS side parses the envelope with
+ * `res.json()` to recover the raw SQL). For very large databases this may
+ * be slow; cursor-based pagination can be added later if needed.
  *
  * @param WP_REST_Request $request The REST request (no parameters consumed).
  *
@@ -313,11 +314,7 @@ function rest_reprint_db( WP_REST_Request $request ): WP_REST_Response|WP_Error 
 		$sql .= $producer->get_sql_fragment() . "\n";
 	}
 
-	// WP REST always JSON-encodes the body, which mangles raw SQL (newlines,
-	// embedded quotes, backslash escapes). Wrap the dump in base64 so it
-	// round-trips losslessly through the JSON envelope; the JS side decodes it.
-	// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
-	return new WP_REST_Response( base64_encode( $sql ), 200 );
+	return new WP_REST_Response( $sql, 200 );
 }
 
 add_action( 'init', __NAMESPACE__ . '\\init' );

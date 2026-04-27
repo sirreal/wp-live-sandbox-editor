@@ -197,19 +197,16 @@ async function importReprintDb(
 		return;
 	}
 
-	// The backend wraps the SQL dump in base64 to survive WP REST's JSON
-	// envelope intact (the Content-Type header is cosmetic — WP REST always
-	// JSON-encodes the body, which would otherwise mangle newlines/quotes
-	// inside the SQL). res.json() unwraps the JSON string literal; the
-	// base64 alphabet then round-trips losslessly into bytes.
-	const b64 = (await res.json()) as string;
-	const sqlBytes = base64ToBytes(b64);
+	// WP REST always JSON-encodes the response body. Parse the envelope to
+	// recover the raw SQL — the cosmetic Content-Type doesn't change the
+	// fact that the body is a JSON string literal.
+	const sql = (await res.json()) as string;
 
 	if (debugMode) {
-		await runSqlVerbose(client, b64);
+		await runSqlVerbose(client, sql);
 	} else {
 		const { runSql } = await import('@wp-playground/blueprints');
-		const sqlFile = new File([sqlBytes], 'reprint-import.sql', {
+		const sqlFile = new File([sql], 'reprint-import.sql', {
 			type: 'application/sql',
 		});
 		await runSql(client, { sql: sqlFile });
@@ -219,11 +216,10 @@ async function importReprintDb(
 /**
  * Replacement for `runSql()` that captures per-statement failures.
  *
- * `runSql` (from `@wp-playground/blueprints`) calls `$wpdb->query($q)` in a
- * loop and never inspects the return value or `$wpdb->last_error`, so a dump
- * causing errors looks identical to a successful import from the JS side.
- * This loop does the same per-statement execution but records and returns
- * the first N failures so we can see them in the console.
+ * `runSql` (from `@wp-playground/blueprints`) ignores `$wpdb->query()` return
+ * values and `$wpdb->last_error`, so a failing dump looks identical to a
+ * successful import. We re-run the same execution loop but record the first
+ * N failures and surface them in the console.
  *
  * The splitter handles `--` line comments and `/* …` block comments before
  * applying the in-string state machine, so an apostrophe inside a comment
@@ -233,16 +229,17 @@ async function importReprintDb(
  * non-numeric column in `FROM_BASE64('…')` and never emits double-quoted
  * strings or backslash escapes. If the producer ever changes shape, audit
  * this splitter.
- *
- * The base64 payload is embedded directly in the PHP snippet (via
- * `JSON.stringify`, safe because base64 contains no characters that need
- * JSON escaping) and decoded server-side, so no temp file is required.
  */
 async function runSqlVerbose(
 	client: PlaygroundClient,
-	sqlBase64: string,
+	sql: string,
 ): Promise<void> {
 	const docroot = await client.documentRoot;
+	// Round-tripping the SQL via a temp file (rather than embedding it as a
+	// PHP string literal) avoids JSON-vs-PHP escape rule mismatches and
+	// keeps memory use bounded for large dumps.
+	const sqlPath = '/tmp/lse-verbose-import.sql';
+	await client.writeFile(sqlPath, new TextEncoder().encode(sql));
 
 	const result = await client.run({
 		code: `<?php
@@ -251,7 +248,7 @@ async function runSqlVerbose(
 			$wpdb->suppress_errors();
 			$wpdb->hide_errors();
 
-			$sql = base64_decode(${JSON.stringify(sqlBase64)});
+			$sql = file_get_contents('${sqlPath}');
 			$len = strlen($sql);
 			$i = 0;
 			$start = 0;
@@ -282,13 +279,11 @@ async function runSqlVerbose(
 			while ($i < $len) {
 				$c = $sql[$i];
 				if (!$in_str) {
-					// Skip '--' line comments to end-of-line.
 					if ($c === '-' && $i + 1 < $len && $sql[$i + 1] === '-') {
 						$nl = strpos($sql, "\\n", $i);
 						$i = ($nl === false) ? $len : $nl + 1;
 						continue;
 					}
-					// Skip /* ... */ block comments.
 					if ($c === '/' && $i + 1 < $len && $sql[$i + 1] === '*') {
 						$end = strpos($sql, '*/', $i + 2);
 						$i = ($end === false) ? $len : $end + 2;
