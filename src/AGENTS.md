@@ -1,11 +1,12 @@
 # `src/` — TypeScript frontend
 
-Entry is `main.ts`, mounted on `#live-sandbox-editor-root` inside wp-admin. Built by Vite (see root `CLAUDE.md`) into `live-sandbox-editor/build/main.js` + `main.css`, then loaded as an ES module via `wp_enqueue_script_module()`.
+Entry is `main.ts`, loaded inside wp-admin. Built by Vite (see root `CLAUDE.md`) into `live-sandbox-editor/build/main.js`, `boot.js`, `app.js`, and `main.css`; only `main.js` is enqueued as an ES module via `wp_enqueue_script_module()`.
 
 ## Modules
 
-- `main.ts` — bootstraps the worker environment, finds the admin root, then dynamically imports `app.ts` and calls `initApp(root)`. Nothing else belongs here.
-- `monaco-environment.ts` — installs `self.MonacoEnvironment` and creates Vite-managed Monaco workers. Imported by `main.ts` before the app is dynamically imported.
+- `main.ts` — bootstraps the worker environment, then runtime-imports the built `boot.js` entry. Nothing else belongs here.
+- `app-entry.ts` — builds to `boot.js`, finds the admin root, and calls `initApp(root)`. This is a separate Vite entry so chunks do not import the WP-enqueued `main.js` as a preload helper.
+- `monaco-environment.ts` — installs `self.MonacoEnvironment` and creates Vite-managed Monaco workers. Imported by `main.ts` before the app entry is runtime-imported.
 - `app.ts` — builds the DOM (editor pane, file tree, preview iframe, status bar, drag handle), wires tab state, calls `initPlayground`, `initFileExplorer`, `addSaveCommand`. The single orchestrator.
 - `editor.ts` — Monaco lifecycle. One shared `IStandaloneCodeEditor`, per-path `ITextModel` cache, Cmd/Ctrl-S command, extension→language map.
 - `file-explorer.ts` — recursive tree over `PlaygroundClient.listFiles`. Directories sort first; each node lazily renders children on expand.
@@ -72,6 +73,6 @@ The only shortcut is Cmd/Ctrl-S, registered inside Monaco via `editor.addCommand
 
 ## Gotchas
 
-- Monaco web workers are wired in `monaco-environment.ts` using Vite's `?worker` imports. `main.ts` imports that environment module first, then dynamically imports `app.ts` so Monaco sees `self.MonacoEnvironment` before any `monaco-editor` module evaluates. Let Vite own worker creation so URLs resolve relative to `build/main.js`; do not hand-register worker entry points in PHP or pass worker URLs through `AppData`.
+- Monaco web workers are wired in `monaco-environment.ts` using Vite's `?worker` imports. `main.ts` imports that environment module first, then runtime-imports the built `boot.js` entry so Monaco sees `self.MonacoEnvironment` before any `monaco-editor` module evaluates. Keep `main.js` out of Vite's preload-helper import graph: WordPress enqueues it with a `?ver=...` query string, while chunks import bare relative URLs. If a chunk imports `./main.js`, the browser treats it as a different module and runs the entry side effects again. Keep `app.js` side-effect-free too; Vite's lazy Monaco chunks may import it as a shared helper module. Let Vite own worker creation so URLs resolve relative to the build output; do not hand-register worker entry points in PHP or pass worker URLs through `AppData`.
 - `@wp-playground/client` API evolves fast; always re-check the current `PlaygroundClient` signatures before adding calls.
 - `initPlayground` is imported dynamically (`await import('@wp-playground/client')`) to keep the initial chunk small; preserve that.

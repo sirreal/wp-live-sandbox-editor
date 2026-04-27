@@ -13,11 +13,16 @@ export default defineConfig({
 	build: {
 		outDir: 'live-sandbox-editor/build',
 		emptyOutDir: true,
+		modulePreload: false,
 		sourcemap: true,
 		rollupOptions: {
-			input: 'src/main.ts',
+			input: {
+				main: 'src/main.ts',
+				boot: 'src/app-entry.ts',
+				app: 'src/app.ts',
+			},
 			output: {
-				entryFileNames: 'main.js',
+				entryFileNames: '[name].js',
 				chunkFileNames: '[name]-[hash].js',
 				assetFileNames: (assetInfo) =>
 					assetInfo.name?.endsWith('.css') ? 'main.css' : '[name][extname]',

@@ -10,15 +10,7 @@ import { readFile, writeFile } from './filesystem.js';
 import { initPlayground } from './playground.js';
 import type { OpenFile } from './types.js';
 
-const INITIALIZED_DATA_KEY = 'liveSandboxEditorInitialized';
-
 export async function initApp(root: HTMLElement): Promise<void> {
-	if (root.dataset[INITIALIZED_DATA_KEY] === 'true') {
-		return;
-	}
-	root.dataset[INITIALIZED_DATA_KEY] = 'true';
-	root.replaceChildren();
-
 	// --- Build DOM ---
 	const main = el('div', 'lse-main');
 	const editorPane = el('div', 'lse-editor-pane');
