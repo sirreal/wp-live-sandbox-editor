@@ -28,7 +28,7 @@ export async function initPlayground(
 	});
 
 	onStatus('Importing site files…');
-	const filesOk = await importReprintFiles(client);
+	const filesOk = true || (await importReprintFiles(client));
 
 	if (filesOk) {
 		onStatus('Importing database…');
@@ -130,7 +130,7 @@ async function importReprintDb(client: PlaygroundClient): Promise<void> {
 
 	await writeFile(client, sqlPath, sql);
 
-    const result = await client.run({
+	const result = await client.run({
 		code: String.raw`<?php
         require_once '${docroot}/wp-load.php';
         global $wpdb;

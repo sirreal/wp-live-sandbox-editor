@@ -10,7 +10,15 @@ import { readFile, writeFile } from './filesystem.js';
 import { initPlayground } from './playground.js';
 import type { OpenFile } from './types.js';
 
+const INITIALIZED_DATA_KEY = 'liveSandboxEditorInitialized';
+
 export async function initApp(root: HTMLElement): Promise<void> {
+	if (root.dataset[INITIALIZED_DATA_KEY] === 'true') {
+		return;
+	}
+	root.dataset[INITIALIZED_DATA_KEY] = 'true';
+	root.replaceChildren();
+
 	// --- Build DOM ---
 	const main = el('div', 'lse-main');
 	const editorPane = el('div', 'lse-editor-pane');
@@ -123,7 +131,7 @@ export async function initApp(root: HTMLElement): Promise<void> {
 
 	const onStatus = (status: string): void => {
 		loadingLabel.textContent = status;
-		statusText.textContent = '● ' + status;
+		statusText.textContent = `● ${status}`;
 	};
 
 	try {
@@ -139,7 +147,7 @@ export async function initApp(root: HTMLElement): Promise<void> {
 
 	const client = playgroundClient;
 	const docroot = await client.documentRoot;
-	const wpContentPath = docroot + '/wp-content';
+	const wpContentPath = `${docroot}/wp-content`;
 
 	// --- File explorer ---
 	initFileExplorer(fileTreeBody, client, wpContentPath, async (filePath) => {
@@ -153,7 +161,7 @@ export async function initApp(root: HTMLElement): Promise<void> {
 		}
 
 		activateTab(filePath);
-		statusText.textContent = '● ' + filePath;
+		statusText.textContent = `● ${filePath}`;
 	});
 
 	// --- Save handler ---
@@ -161,7 +169,7 @@ export async function initApp(root: HTMLElement): Promise<void> {
 		await writeFile(client, path, content);
 		const currentUrl = await client.getCurrentURL();
 		await client.goTo(currentUrl);
-		statusText.textContent = '● Saved: ' + path.split('/').pop();
+		statusText.textContent = `● Saved: ${path.split('/').pop()}`;
 		setTimeout(() => {
 			statusText.textContent = '● Ready';
 		}, 2000);
@@ -199,9 +207,9 @@ function initDragHandle(
 			if (editorWidth < 200 || previewWidth < 200) return;
 
 			editorPane.style.flex = 'none';
-			editorPane.style.width = editorWidth + 'px';
+			editorPane.style.width = `${editorWidth}px`;
 			previewPane.style.flex = 'none';
-			previewPane.style.width = previewWidth + 'px';
+			previewPane.style.width = `${previewWidth}px`;
 		};
 
 		const onUp = (): void => {

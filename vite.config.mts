@@ -15,18 +15,12 @@ export default defineConfig({
 		emptyOutDir: true,
 		sourcemap: true,
 		rollupOptions: {
-			input: {
-				main: 'src/main.ts',
-				'editor.worker': 'src/workers/editor.worker.ts',
-				'json.worker': 'src/workers/json.worker.ts',
-				'css.worker': 'src/workers/css.worker.ts',
-				'html.worker': 'src/workers/html.worker.ts',
-				'ts.worker': 'src/workers/ts.worker.ts',
-			},
+			input: 'src/main.ts',
 			output: {
-				entryFileNames: '[name].js',
+				entryFileNames: 'main.js',
 				chunkFileNames: '[name]-[hash].js',
-				assetFileNames: '[name][extname]',
+				assetFileNames: (assetInfo) =>
+					assetInfo.name?.endsWith('.css') ? 'main.css' : '[name][extname]',
 			},
 		},
 	},

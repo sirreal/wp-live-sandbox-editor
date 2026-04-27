@@ -4,7 +4,8 @@ Entry is `main.ts`, mounted on `#live-sandbox-editor-root` inside wp-admin. Buil
 
 ## Modules
 
-- `main.ts` — DOMContentLoaded → `initApp(root)`. Nothing else belongs here.
+- `main.ts` — bootstraps the worker environment, finds the admin root, then dynamically imports `app.ts` and calls `initApp(root)`. Nothing else belongs here.
+- `monaco-environment.ts` — installs `self.MonacoEnvironment` and creates Vite-managed Monaco workers. Imported by `main.ts` before the app is dynamically imported.
 - `app.ts` — builds the DOM (editor pane, file tree, preview iframe, status bar, drag handle), wires tab state, calls `initPlayground`, `initFileExplorer`, `addSaveCommand`. The single orchestrator.
 - `editor.ts` — Monaco lifecycle. One shared `IStandaloneCodeEditor`, per-path `ITextModel` cache, Cmd/Ctrl-S command, extension→language map.
 - `file-explorer.ts` — recursive tree over `PlaygroundClient.listFiles`. Directories sort first; each node lazily renders children on expand.
@@ -71,6 +72,6 @@ The only shortcut is Cmd/Ctrl-S, registered inside Monaco via `editor.addCommand
 
 ## Gotchas
 
-- Monaco web workers are wired via `self.MonacoEnvironment.getWorkerUrl` in `editor.ts`. Each worker is a separate Vite entry point (`src/workers/*.ts`) compiled to `build/*.worker.js`, registered as a WordPress script module, declared as a dynamic dependency of the main module, and its URL is passed via `AppData.workerUrls`. Swapping bundlers requires keeping the worker entry points self-contained and updating the PHP registration accordingly.
+- Monaco web workers are wired in `monaco-environment.ts` using Vite's `?worker` imports. `main.ts` imports that environment module first, then dynamically imports `app.ts` so Monaco sees `self.MonacoEnvironment` before any `monaco-editor` module evaluates. Let Vite own worker creation so URLs resolve relative to `build/main.js`; do not hand-register worker entry points in PHP or pass worker URLs through `AppData`.
 - `@wp-playground/client` API evolves fast; always re-check the current `PlaygroundClient` signatures before adding calls.
 - `initPlayground` is imported dynamically (`await import('@wp-playground/client')`) to keep the initial chunk small; preserve that.

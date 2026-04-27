@@ -70,63 +70,16 @@ function enqueue_assets( string $hook_suffix ): void {
 		return;
 	}
 
-	$worker_handles = array(
-		'editor' => SLUG . '/editor-worker',
-		'json'   => SLUG . '/json-worker',
-		'css'    => SLUG . '/css-worker',
-		'html'   => SLUG . '/html-worker',
-		'ts'     => SLUG . '/ts-worker',
-	);
-
-	foreach ( $worker_handles as $key => $handle ) {
-		wp_register_script_module(
-			$handle,
-			plugins_url( "build/{$key}.worker.js", __FILE__ ),
-			array(),
-			VERSION
-		);
-	}
-
 	wp_enqueue_script_module(
 		SLUG,
 		plugins_url( 'build/main.js', __FILE__ ),
-		array(
-			array(
-				'id' => $worker_handles['editor'],
-				'import' => 'dynamic',
-			),
-			array(
-				'id' => $worker_handles['json'],
-				'import' => 'dynamic',
-			),
-			array(
-				'id' => $worker_handles['css'],
-				'import' => 'dynamic',
-			),
-			array(
-				'id' => $worker_handles['html'],
-				'import' => 'dynamic',
-			),
-			array(
-				'id' => $worker_handles['ts'],
-				'import' => 'dynamic',
-			),
-		),
-		VERSION
+		array(),
+		asset_version( 'build/main.js' )
 	);
 
 	add_filter(
 		'script_module_data_' . SLUG,
-		function () use ( $worker_handles ): array {
-			$worker_urls = array();
-			foreach ( $worker_handles as $key => $handle ) {
-				$worker_urls[ $key ] = add_query_arg(
-					'ver',
-					VERSION,
-					plugins_url( "build/{$key}.worker.js", __FILE__ )
-				);
-			}
-
+		function (): array {
 			/**
 			 * Sync type with AppData TS interface.
 			 *
@@ -134,27 +87,43 @@ function enqueue_assets( string $hook_suffix ): void {
 			 *                   restUrl: string;
 			 *                   nonce: string;
 			 *                   siteUrl: string;
-			 *                   workerUrls: array{
-			 *                     editor: string;
-			 *                     json: string;
-			 *                     css: string;
-			 *                     html: string;
-			 *                     ts: string;
-			 *                   };
 			 *                 }
 			 */
 			$app_data = array(
-				'restUrl'    => rest_url( SLUG . '/v1' ),
-				'nonce'      => wp_create_nonce( 'wp_rest' ),
-				'siteUrl'    => get_site_url(),
-				'workerUrls' => $worker_urls,
+				'restUrl' => rest_url( SLUG . '/v1' ),
+				'nonce'   => wp_create_nonce( 'wp_rest' ),
+				'siteUrl' => get_site_url(),
 			);
 			return $app_data;
 		}
 	);
 
-	wp_enqueue_style( SLUG, plugins_url( 'style.css', __FILE__ ), array(), VERSION );
-	wp_enqueue_style( SLUG . '-monaco', plugins_url( 'build/main.css', __FILE__ ), array(), VERSION );
+	wp_enqueue_style(
+		SLUG,
+		plugins_url( 'style.css', __FILE__ ),
+		array(),
+		asset_version( 'style.css' )
+	);
+	wp_enqueue_style(
+		SLUG . '-monaco',
+		plugins_url( 'build/main.css', __FILE__ ),
+		array(),
+		asset_version( 'build/main.css' )
+	);
+}
+
+/**
+ * Get a cache-busting version for a plugin asset.
+ *
+ * @param string $relative_path Asset path relative to this plugin directory.
+ * @return string Asset version.
+ */
+function asset_version( string $relative_path ): string {
+	$path = __DIR__ . '/' . ltrim( $relative_path, '/' );
+	if ( file_exists( $path ) ) {
+		return (string) filemtime( $path );
+	}
+	return VERSION;
 }
 
 /** Register the admin menu page. */
