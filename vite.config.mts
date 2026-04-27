@@ -1,5 +1,11 @@
-import monacoEditorPlugin from 'vite-plugin-monaco-editor';
 import { defineConfig } from 'vite';
+import monacoEditorPluginPkg from 'vite-plugin-monaco-editor';
+
+// `vite-plugin-monaco-editor` is published as CJS with `exports.default`;
+// under ESM the default import resolves to the namespace, not the function.
+const monacoEditorPlugin = (
+	monacoEditorPluginPkg as unknown as { default: typeof monacoEditorPluginPkg }
+).default;
 
 export default defineConfig({
 	base: './',
