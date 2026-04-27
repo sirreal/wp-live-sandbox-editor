@@ -16,9 +16,9 @@ export default defineConfig({
 		modulePreload: false,
 		sourcemap: true,
 		rollupOptions: {
+			preserveEntrySignatures: 'exports-only',
 			input: {
 				main: 'src/main.ts',
-				boot: 'src/app-entry.ts',
 				app: 'src/app.ts',
 			},
 			output: {
