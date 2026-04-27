@@ -1,3 +1,6 @@
+// Must execute before any monaco-editor module loads so workers are
+// registered before Monaco reads `self.MonacoEnvironment`. main.ts lists
+// this import before `./app.js`.
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import CssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
 import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';

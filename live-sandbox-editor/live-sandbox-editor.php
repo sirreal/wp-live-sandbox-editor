@@ -106,9 +106,9 @@ function enqueue_assets( string $hook_suffix ): void {
 	);
 	wp_enqueue_style(
 		SLUG . '-monaco',
-		plugins_url( 'build/main.css', __FILE__ ),
+		plugins_url( 'build/monaco.css', __FILE__ ),
 		array(),
-		asset_version( 'build/main.css' )
+		asset_version( 'build/monaco.css' )
 	);
 }
 
