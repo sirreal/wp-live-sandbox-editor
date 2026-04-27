@@ -293,6 +293,11 @@ function rest_reprint_db( WP_REST_Request $request ): WP_REST_Response|WP_Error 
 		$sql .= $producer->get_sql_fragment() . "\n";
 	}
 
+	// DEBUG: dump the SQL to a file for inspection.
+	$dump_path = wp_upload_dir()['basedir'] . '/reprint-db-dump.sql';
+	file_put_contents( $dump_path, $sql );
+	error_log( '[live-sandbox-editor] DB dump written to ' . $dump_path );
+
 	return new WP_REST_Response(
 		$sql,
 		200,
