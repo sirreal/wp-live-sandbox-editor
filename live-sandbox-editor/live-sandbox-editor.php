@@ -227,7 +227,7 @@ function stream_ndjson_setup(): void {
  * @param array $record Record payload — JSON-encoded as one line.
  */
 function stream_ndjson_emit( array $record ): void {
-	echo wp_json_encode( $record ), "\n";
+	echo wp_json_encode( $record, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_LINE_TERMINATORS ), "\n";
 	flush();
 }
 
