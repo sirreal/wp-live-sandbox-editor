@@ -5,7 +5,7 @@ This directory is what gets zipped and installed.
 ## Guardrails
 
 - `build/` and `vendor/` are generated; never commit them.
-- Run plugin Composer commands from this directory, not the repo root.
+- Composer is driven from the repo root: `composer install` / `composer update` populate this directory's `vendor/` via a post-install script. To operate on the plugin manifest directly, use `COMPOSER=plugin-composer.json composer <cmd> --working-dir=live-sandbox-editor` from the repo root.
 - PHP coding rules are defined in `../phpcs.xml`.
 - User-facing strings use the `live-sandbox-editor` text domain.
 - Global PHP symbols use the `live_sandbox_editor` prefix.

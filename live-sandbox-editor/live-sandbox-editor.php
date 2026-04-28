@@ -133,7 +133,7 @@ function reprint_notice(): void {
 		return;
 	}
 	echo '<div class="notice notice-error"><p>';
-	esc_html_e( 'Live Sandbox Editor: Reprint classes could not be loaded. Run composer install in the plugin directory.', 'live-sandbox-editor' );
+	esc_html_e( 'Live Sandbox Editor: Reprint classes could not be loaded. Run composer install in the project root directory.', 'live-sandbox-editor' );
 	echo '</p></div>';
 }
 
