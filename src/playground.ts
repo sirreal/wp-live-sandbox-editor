@@ -149,7 +149,7 @@ async function importReprintFiles(client: PlaygroundClient): Promise<boolean> {
 
 	try {
 		await readNdjson(res, async (rec) => {
-			if (rec.t !== 'f') return;
+			if (rec.type !== 'file') return;
 			const fullPath = docroot + rec.path;
 			await flusher.addFileChunk(fullPath, rec.b64, rec.seq === 0);
 		});
@@ -199,7 +199,7 @@ async function importReprintDb(
 
 	try {
 		await readNdjson(res, async (rec) => {
-			if (rec.t !== 'sql') return;
+			if (rec.type !== 'sql') return;
 			await flusher.addSqlChunk(rec.b64);
 		});
 		await flusher.flush();

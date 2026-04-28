@@ -1,10 +1,10 @@
 import type { PlaygroundClient } from '@wp-playground/client';
 
 export type NdjsonRecord =
-	| { t: 'f'; path: string; b64: string; seq: number; final: boolean }
-	| { t: 'sql'; b64: string }
-	| { t: 'end' }
-	| { t: 'err'; message: string };
+	| { type: 'file'; path: string; b64: string; seq: number; final: boolean }
+	| { type: 'sql'; b64: string }
+	| { type: 'end' }
+	| { type: 'err'; message: string };
 
 /**
  * Read an NDJSON response body line by line, invoking `onRecord` for each
@@ -40,10 +40,10 @@ export async function readNdjson(
 			buf = buf.slice(nl + 1);
 			if (!line) continue;
 			const rec = JSON.parse(line) as NdjsonRecord;
-			if (rec.t === 'err') {
+			if (rec.type === 'err') {
 				throw new Error(`Stream error: ${rec.message}`);
 			}
-			if (rec.t === 'end') {
+			if (rec.type === 'end') {
 				sawEnd = true;
 				break;
 			}
@@ -137,29 +137,50 @@ export class BatchedDiskFlusher {
 
 		const payload = JSON.stringify({ items, sqlPath: this.sqlPath });
 
-		await this.client.run({
+		const result = await this.client.run({
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: payload,
 			code: `<?php
 				$raw = file_get_contents('php://input');
 				$data = json_decode($raw, true);
+				if ($data === null && json_last_error() !== JSON_ERROR_NONE) {
+					echo json_encode(['errors' => ['json_decode failed: ' . json_last_error_msg()]]);
+					exit;
+				}
 				$sql_path = $data['sqlPath'];
+				$errors = [];
 				foreach ($data['items'] as $it) {
-					$bytes = base64_decode($it['b64']);
+					$bytes = base64_decode($it['b64'], true);
+					if ($bytes === false) {
+						$errors[] = 'base64_decode failed for ' . $it['kind'] . ' chunk';
+						continue;
+					}
 					if ($it['kind'] === 'file') {
 						$p = $it['path'];
 						if (!empty($it['first'])) {
 							@mkdir(dirname($p), 0777, true);
-							file_put_contents($p, $bytes);
+							$written = file_put_contents($p, $bytes);
 						} else {
-							file_put_contents($p, $bytes, FILE_APPEND);
+							$written = file_put_contents($p, $bytes, FILE_APPEND);
+						}
+						if ($written === false) {
+							$errors[] = 'Failed to write file chunk to ' . $p;
 						}
 					} elseif ($it['kind'] === 'sql') {
-						file_put_contents($sql_path, $bytes, FILE_APPEND);
+						$written = file_put_contents($sql_path, $bytes, FILE_APPEND);
+						if ($written === false) {
+							$errors[] = 'Failed to append SQL chunk to ' . $sql_path;
+						}
 					}
 				}
+				echo json_encode(['errors' => $errors]);
 			`,
 		});
+
+		const response = JSON.parse(result.text) as { errors: string[] };
+		if (response.errors.length > 0) {
+			throw new Error(`Disk flush failed: ${response.errors.join('; ')}`);
+		}
 	}
 }

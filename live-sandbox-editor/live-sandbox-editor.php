@@ -235,7 +235,7 @@ function stream_ndjson_emit( array $record ): void {
  * REST callback: stream wp-content files as NDJSON.
  *
  * Each line is one chunk of one file:
- *   { "t":"f", "path":"/wp-content/…", "b64":"…", "seq":N, "final":bool }
+ *   { "type":"file", "path":"/wp-content/…", "b64":"…", "seq":N, "final":bool }
  *
  * The handler bypasses WP_REST_Response and exits directly so the body is
  * streamed without WP's JSON-envelope buffering. PHP peak memory stays
@@ -247,8 +247,9 @@ function rest_reprint_files( WP_REST_Request $request ): void { // phpcs:ignore 
 	maybe_load_reprint();
 
 	if ( ! class_exists( 'FileTreeProducer' ) ) {
+		http_response_code( 503 );
 		stream_ndjson_setup();
-		stream_ndjson_emit( array( 't' => 'err', 'message' => 'Reprint classes not available.' ) );
+		stream_ndjson_emit( array( 'type' => 'err', 'message' => 'Reprint classes not available.' ) );
 		exit;
 	}
 
@@ -262,8 +263,9 @@ function rest_reprint_files( WP_REST_Request $request ): void { // phpcs:ignore 
 			$paths[] = $file->getPathname();
 		}
 	} catch ( \UnexpectedValueException $e ) {
+		http_response_code( 503 );
 		stream_ndjson_setup();
-		stream_ndjson_emit( array( 't' => 'err', 'message' => 'scan_error: ' . $e->getMessage() ) );
+		stream_ndjson_emit( array( 'type' => 'err', 'message' => 'scan_error: ' . $e->getMessage() ) );
 		exit;
 	}
 
@@ -293,7 +295,7 @@ function rest_reprint_files( WP_REST_Request $request ): void { // phpcs:ignore 
 
 			stream_ndjson_emit(
 				array(
-					't'     => 'f',
+					'type'  => 'file',
 					'path'  => $rel,
 					'b64'   => base64_encode( $chunk['data'] ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
 					'seq'   => (int) ( $chunk['offset'] ?? 0 ),
@@ -312,11 +314,11 @@ function rest_reprint_files( WP_REST_Request $request ): void { // phpcs:ignore 
 			}
 		}
 	} catch ( \Throwable $e ) {
-		stream_ndjson_emit( array( 't' => 'err', 'message' => $e->getMessage() ) );
+		stream_ndjson_emit( array( 'type' => 'err', 'message' => $e->getMessage() ) );
 		exit;
 	}
 
-	stream_ndjson_emit( array( 't' => 'end' ) );
+	stream_ndjson_emit( array( 'type' => 'end' ) );
 	exit;
 }
 
@@ -324,7 +326,7 @@ function rest_reprint_files( WP_REST_Request $request ): void { // phpcs:ignore 
  * REST callback: stream a MySQL dump as NDJSON.
  *
  * Each line is one SQL fragment from MySQLDumpProducer:
- *   { "t":"sql", "b64":"…" }
+ *   { "type":"sql", "b64":"…" }
  *
  * Fragments are base64-encoded so embedded newlines/binary bytes don't
  * break NDJSON line framing. PHP peak memory stays bounded by the
@@ -336,8 +338,9 @@ function rest_reprint_db( WP_REST_Request $request ): void { // phpcs:ignore Gen
 	maybe_load_reprint();
 
 	if ( ! class_exists( 'WordPress\\DataLiberation\\MySQLDumpProducer' ) ) {
+		http_response_code( 503 );
 		stream_ndjson_setup();
-		stream_ndjson_emit( array( 't' => 'err', 'message' => 'Reprint classes not available.' ) );
+		stream_ndjson_emit( array( 'type' => 'err', 'message' => 'Reprint classes not available.' ) );
 		exit;
 	}
 
@@ -358,8 +361,9 @@ function rest_reprint_db( WP_REST_Request $request ): void { // phpcs:ignore Gen
 			array( \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION )
 		);
 	} catch ( \PDOException $e ) {
+		http_response_code( 503 );
 		stream_ndjson_setup();
-		stream_ndjson_emit( array( 't' => 'err', 'message' => 'db_connect: ' . $e->getMessage() ) );
+		stream_ndjson_emit( array( 'type' => 'err', 'message' => 'db_connect: ' . $e->getMessage() ) );
 		exit;
 	}
 
@@ -376,8 +380,8 @@ function rest_reprint_db( WP_REST_Request $request ): void { // phpcs:ignore Gen
 			}
 			stream_ndjson_emit(
 				array(
-					't'   => 'sql',
-					'b64' => base64_encode( $fragment . "\n" ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
+					'type' => 'sql',
+					'b64'  => base64_encode( $fragment . "\n" ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
 				)
 			);
 
@@ -389,11 +393,11 @@ function rest_reprint_db( WP_REST_Request $request ): void { // phpcs:ignore Gen
 			}
 		}
 	} catch ( \Throwable $e ) {
-		stream_ndjson_emit( array( 't' => 'err', 'message' => $e->getMessage() ) );
+		stream_ndjson_emit( array( 'type' => 'err', 'message' => $e->getMessage() ) );
 		exit;
 	}
 
-	stream_ndjson_emit( array( 't' => 'end' ) );
+	stream_ndjson_emit( array( 'type' => 'end' ) );
 	exit;
 }
 
