@@ -1,5 +1,7 @@
 {
 	"name": "sirreal/live-sandbox-editor-plugin",
+	"description": "Live Sandbox Editor — a WordPress plugin that provides an in-browser sandbox editor backed by Playground.",
+	"license": "GPL-2.0-or-later",
 	"require": {
 		"wp-php-toolkit/reprint-exporter": "^0.1.45"
 	}
