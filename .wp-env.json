@@ -1,4 +1,5 @@
 {
+	"$schema": "https://schemas.wp.org/trunk/wp-env.json",
 	"config": {
 		"WP_DEBUG": true,
 		"WP_DEBUG_DISPLAY": true,
