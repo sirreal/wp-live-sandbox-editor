@@ -34,8 +34,8 @@ export async function readNdjson(
 		}
 		buf += decoder.decode(value, { stream: true });
 
-		let nl;
-		while ((nl = buf.indexOf('\n')) >= 0) {
+		let nl = buf.indexOf('\n');
+		while (nl >= 0) {
 			const line = buf.slice(0, nl);
 			buf = buf.slice(nl + 1);
 			if (!line) continue;
@@ -48,11 +48,14 @@ export async function readNdjson(
 				break;
 			}
 			await onRecord(rec);
+			nl = buf.indexOf('\n');
 		}
 	}
 
 	if (buf.trim().length > 0) {
-		throw new Error(`Stream ended with unterminated record: ${buf.slice(0, 120)}`);
+		throw new Error(
+			`Stream ended with unterminated record: ${buf.slice(0, 120)}`,
+		);
 	}
 	if (!sawEnd) {
 		throw new Error('Stream ended without {"t":"end"} marker (truncated)');
@@ -101,11 +104,7 @@ export class BatchedDiskFlusher {
 		return this.sqlPath;
 	}
 
-	async addFileChunk(
-		path: string,
-		b64: string,
-		first: boolean,
-	): Promise<void> {
+	async addFileChunk(path: string, b64: string, first: boolean): Promise<void> {
 		this.queue.push({ kind: 'file', path, b64, first });
 		this.queuedBytes += b64.length;
 		if (this.queuedBytes >= this.flushBytes) {
