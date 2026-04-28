@@ -44,7 +44,7 @@ composer install --working-dir=live-sandbox-editor --no-scripts --no-dev
 Then install and build the JavaScript assets:
 
 ```sh
-npm install
+npm ci
 npm run build
 ```
 
