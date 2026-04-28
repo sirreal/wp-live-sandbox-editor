@@ -87,12 +87,16 @@ function enqueue_assets( string $hook_suffix ): void {
 			 *                   restUrl: string;
 			 *                   nonce: string;
 			 *                   siteUrl: string;
+			 *                   scriptDebug: bool;
+			 *                   wpDebug: bool;
 			 *                 }
 			 */
 			$app_data = array(
-				'restUrl' => rest_url( SLUG . '/v1' ),
-				'nonce'   => wp_create_nonce( 'wp_rest' ),
-				'siteUrl' => get_site_url(),
+				'restUrl'     => rest_url( SLUG . '/v1' ),
+				'nonce'       => wp_create_nonce( 'wp_rest' ),
+				'siteUrl'     => get_site_url(),
+				'scriptDebug' => defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG,
+				'wpDebug'     => defined( 'WP_DEBUG' ) && WP_DEBUG,
 			);
 			return $app_data;
 		}
@@ -153,7 +157,7 @@ function reprint_notice(): void {
 		return;
 	}
 	echo '<div class="notice notice-error"><p>';
-	esc_html_e( 'Live Sandbox Editor: Reprint classes could not be loaded. Run composer install in the plugin directory.', 'live-sandbox-editor' );
+	esc_html_e( 'Live Sandbox Editor: Reprint classes could not be loaded. Run composer install in the project root directory.', 'live-sandbox-editor' );
 	echo '</p></div>';
 }
 
@@ -197,6 +201,8 @@ function register_rest_routes(): void {
  * File contents are base64-encoded so binary assets (images, fonts) survive
  * JSON transport. The JS layer decodes them to Uint8Array before writing to
  * the Playground filesystem.
+ *
+ * @param WP_REST_Request $request The REST request; reads the optional `cursor` query arg.
  */
 function rest_reprint_files( WP_REST_Request $request ): WP_REST_Response|WP_Error {
 	maybe_load_reprint();
@@ -220,7 +226,10 @@ function rest_reprint_files( WP_REST_Request $request ): WP_REST_Response|WP_Err
 		return new WP_Error( 'scan_error', $e->getMessage(), array( 'status' => 500 ) );
 	}
 
-	$cursor = $request->get_param( 'cursor' ) ?: null;
+	$cursor = $request->get_param( 'cursor' );
+	if ( empty( $cursor ) ) {
+		$cursor = null;
+	}
 
 	$producer = new FileTreeProducer(
 		$wp_content_dir,
@@ -233,10 +242,12 @@ function rest_reprint_files( WP_REST_Request $request ): WP_REST_Response|WP_Err
 		)
 	);
 
+	// `$pending_data` accumulates raw bytes per path for multi-chunk files;
+	// `$limit_bytes` caps file data emitted per response (~768 KB).
 	$files          = array();
-	$pending_data   = array(); // path => accumulated raw bytes for multi-chunk files
+	$pending_data   = array();
 	$response_bytes = 0;
-	$limit_bytes    = 768 * 1024; // ~768 KB of file data per response
+	$limit_bytes    = 768 * 1024;
 
 	while ( $producer->next_chunk() ) {
 		$chunk = $producer->get_current_chunk();
@@ -253,7 +264,8 @@ function rest_reprint_files( WP_REST_Request $request ): WP_REST_Response|WP_Err
 		$pending_data[ $rel ] .= $chunk['data'];
 
 		if ( $chunk['is_last_chunk'] ) {
-			$files[ $rel ]   = base64_encode( $pending_data[ $rel ] );
+			// base64 is required to ship raw bytes through the JSON envelope; not obfuscation.
+			$files[ $rel ]   = base64_encode( $pending_data[ $rel ] ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
 			$response_bytes += strlen( $pending_data[ $rel ] );
 			unset( $pending_data[ $rel ] );
 
@@ -281,10 +293,16 @@ function rest_reprint_files( WP_REST_Request $request ): WP_REST_Response|WP_Err
 /**
  * REST callback: generate a MySQL dump via MySQLDumpProducer.
  *
- * Returns the full SQL dump as text/plain. For very large databases this may
+ * Returns the full SQL dump as a JSON-encoded string body (WP REST always
+ * JSON-encodes the response, so the JS side parses the envelope with
+ * `res.json()` to recover the raw SQL). For very large databases this may
  * be slow; cursor-based pagination can be added later if needed.
+ *
+ * @param WP_REST_Request $request The REST request (no parameters consumed).
+ *
+ * @SuppressWarnings(PHPMD.UnusedFormalParameter)
  */
-function rest_reprint_db( WP_REST_Request $request ): WP_REST_Response|WP_Error {
+function rest_reprint_db( WP_REST_Request $request ): WP_REST_Response|WP_Error { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 	maybe_load_reprint();
 
 	if ( ! class_exists( 'WordPress\\DataLiberation\\MySQLDumpProducer' ) ) {
@@ -300,10 +318,13 @@ function rest_reprint_db( WP_REST_Request $request ): WP_REST_Response|WP_Error 
 			// Fallback: simple host:dbname DSN sufficient for most single-host setups.
 			$dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4';
 		}
+		// MySQLDumpProducer requires a raw PDO handle — wpdb cannot be used here.
+		// phpcs:ignore WordPress.DB.RestrictedClasses.mysql__PDO
 		$pdo = new \PDO(
 			$dsn,
 			DB_USER,
 			DB_PASSWORD,
+			// phpcs:ignore WordPress.DB.RestrictedClasses.mysql__PDO
 			array( \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION )
 		);
 	} catch ( \PDOException $e ) {
@@ -317,11 +338,7 @@ function rest_reprint_db( WP_REST_Request $request ): WP_REST_Response|WP_Error 
 		$sql .= $producer->get_sql_fragment() . "\n";
 	}
 
-	return new WP_REST_Response(
-		$sql,
-		200,
-		array( 'Content-Type' => 'text/plain; charset=utf-8' )
-	);
+	return new WP_REST_Response( $sql, 200 );
 }
 
 add_action( 'init', __NAMESPACE__ . '\\init' );

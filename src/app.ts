@@ -8,7 +8,7 @@ import {
 import { initFileExplorer } from './file-explorer.js';
 import { readFile, writeFile } from './filesystem.js';
 import { initPlayground } from './playground.js';
-import type { OpenFile } from './types.js';
+import { type OpenFile, getAppData } from './types.js';
 
 export async function initApp(root: HTMLElement): Promise<void> {
 	// --- Build DOM ---
@@ -126,8 +126,13 @@ export async function initApp(root: HTMLElement): Promise<void> {
 		statusText.textContent = `● ${status}`;
 	};
 
+	const { scriptDebug, wpDebug } = getAppData();
+
 	try {
-		playgroundClient = await initPlayground(iframe, onStatus);
+		playgroundClient = await initPlayground(iframe, onStatus, {
+			scriptDebug,
+			wpDebug,
+		});
 	} catch (err) {
 		loadingLabel.textContent = 'Playground failed to initialize.';
 		console.error('[live-sandbox-editor] Playground init error:', err);
