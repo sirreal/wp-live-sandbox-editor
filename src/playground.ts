@@ -1,5 +1,5 @@
 import type { PlaygroundClient } from '@wp-playground/client';
-import { ensureDir, writeFile } from './filesystem.js';
+import { BatchedDiskFlusher, readNdjson } from './streaming.js';
 import { getAppData } from './types.js';
 
 export interface DebugSettings {
@@ -45,8 +45,8 @@ export async function initPlayground(
 		onStatus('Importing database…');
 		await importReprintDb(client, debugMode);
 
-		onStatus('Fixing site URL…');
-		await fixSiteUrl(client);
+		onStatus('Finalizing sandbox…');
+		await applyPostImportFixups(client);
 	}
 
 	await client.goTo('/');
@@ -113,79 +113,61 @@ async function logSqliteIntegrationVersion(
 }
 
 /**
- * Fetch wp-content files from the REST proxy and write them into Playground.
+ * Stream wp-content files from the REST proxy directly into Playground
+ * disk. Files are appended chunk-by-chunk via FILE_APPEND inside Playground;
+ * the JS heap never holds a full file or a buffered response body.
  *
- * PHP returns file contents as base64 (so binary assets survive JSON).
- * We decode each value to a Uint8Array before handing it to writeFile().
- *
- * Returns true if files were successfully imported, false on failure.
+ * Returns true on success, false if the server reports an error.
  */
 async function importReprintFiles(client: PlaygroundClient): Promise<boolean> {
 	const { restUrl, nonce } = getAppData();
 	const docroot = await client.documentRoot;
-	let cursor: string | null = null;
 
-	do {
-		const params = new URLSearchParams();
-		if (cursor) params.set('cursor', cursor);
+	const res = await fetch(`${restUrl}/reprint-files`, {
+		headers: { 'X-WP-Nonce': nonce, Accept: 'application/x-ndjson' },
+	});
 
-		const res = await fetch(`${restUrl}/reprint-files?${params.toString()}`, {
-			headers: { 'X-WP-Nonce': nonce },
+	if (!res.ok) {
+		const errorText = await getErrorResponseText(res);
+		console.error(
+			'[live-sandbox-editor] Reprint file import failed:',
+			res.status,
+			errorText ?? '',
+		);
+		return false;
+	}
+
+	const flusher = new BatchedDiskFlusher(client);
+
+	try {
+		await readNdjson(res, async (rec) => {
+			if (rec.type !== 'file') return;
+			const fullPath = docroot + rec.path;
+			await flusher.addFileChunk(fullPath, rec.b64, rec.seq === 0);
 		});
-
-		if (res.status === 503) {
-			console.warn(
-				'[live-sandbox-editor] Reprint classes unavailable — skipping file import.',
-			);
-			return false;
-		}
-
-		if (!res.ok) {
-			const errorText = await getErrorResponseText(res);
-			console.error(
-				'[live-sandbox-editor] Reprint file import failed:',
-				res.status,
-				errorText ?? '',
-			);
-			return false;
-		}
-
-		const data = (await res.json()) as {
-			files: Record<string, string>;
-			nextCursor: string | null;
-		};
-
-		for (const [relativePath, b64Content] of Object.entries(data.files)) {
-			const fullPath = docroot + relativePath;
-			const dir = fullPath.substring(0, fullPath.lastIndexOf('/'));
-			await ensureDir(client, dir);
-			// Decode base64 → Uint8Array so binary files (images, fonts) are
-			// written correctly. PlaygroundClient.writeFile accepts Uint8Array.
-			const bytes = base64ToBytes(b64Content);
-			await writeFile(client, fullPath, bytes);
-		}
-
-		cursor = data.nextCursor;
-	} while (cursor);
+		await flusher.flush();
+	} catch (err) {
+		console.error('[live-sandbox-editor] File stream failed:', err);
+		return false;
+	}
 
 	return true;
 }
 
+/**
+ * Stream the SQL dump from the REST proxy straight to a file inside
+ * Playground, then execute it via an in-Playground splitter that reads
+ * from disk. The full SQL never lives in JS or PHP memory — both sides
+ * are bounded by the flusher's batch size.
+ */
 async function importReprintDb(
 	client: PlaygroundClient,
 	debugMode: boolean,
 ): Promise<void> {
 	const { restUrl, nonce } = getAppData();
 	const res = await fetch(`${restUrl}/reprint-db`, {
-		headers: { 'X-WP-Nonce': nonce },
+		headers: { 'X-WP-Nonce': nonce, Accept: 'application/x-ndjson' },
 	});
-
-	if (res.status === 503) {
-		console.warn(
-			'[live-sandbox-editor] Reprint classes unavailable — skipping DB import.',
-		);
-		return;
-	}
 
 	if (!res.ok) {
 		const errorText = await getErrorResponseText(res);
@@ -197,49 +179,46 @@ async function importReprintDb(
 		return;
 	}
 
-	// WP REST always JSON-encodes the response body. Parse the envelope to
-	// recover the raw SQL — the cosmetic Content-Type doesn't change the
-	// fact that the body is a JSON string literal.
-	const sql = (await res.json()) as string;
+	const flusher = new BatchedDiskFlusher(client);
+	await flusher.resetSqlFile();
 
-	if (debugMode) {
-		await runSqlVerbose(client, sql);
-	} else {
-		const { runSql } = await import('@wp-playground/blueprints');
-		const sqlFile = new File([sql], 'reprint-import.sql', {
-			type: 'application/sql',
+	try {
+		await readNdjson(res, async (rec) => {
+			if (rec.type !== 'sql') return;
+			await flusher.addSqlChunk(rec.b64);
 		});
-		await runSql(client, { sql: sqlFile });
+		await flusher.flush();
+	} catch (err) {
+		console.error('[live-sandbox-editor] DB stream failed:', err);
+		return;
 	}
+
+	await runSqlFromDisk(client, flusher.getSqlPath(), debugMode);
 }
 
 /**
- * Replacement for `runSql()` that captures per-statement failures.
+ * Execute a SQL dump that's already on disk inside Playground.
  *
- * `runSql` (from `@wp-playground/blueprints`) ignores `$wpdb->query()` return
- * values and `$wpdb->last_error`, so a failing dump looks identical to a
- * successful import. We re-run the same execution loop but record the first
- * N failures and surface them in the console.
+ * Uses an in-PHP statement splitter that handles `--` line comments and
+ * `/* …` block comments before applying the in-string state machine, so an
+ * apostrophe inside a comment (e.g. `-- Dumping data for table 'foo'`)
+ * doesn't flip parsing state. The in-string machine itself only recognises
+ * single-quoted literals (with SQL `''` escape) — this matches Reprint's
+ * output, which wraps every non-numeric column in `FROM_BASE64('…')` and
+ * never emits double-quoted strings or backslash escapes. If the producer
+ * ever changes shape, audit this splitter.
  *
- * The splitter handles `--` line comments and `/* …` block comments before
- * applying the in-string state machine, so an apostrophe inside a comment
- * (e.g. `-- Dumping data for table 'foo'`) doesn't flip parsing state. The
- * in-string machine itself only recognises single-quoted literals (with
- * SQL `''` escape) — this matches Reprint's output, which wraps every
- * non-numeric column in `FROM_BASE64('…')` and never emits double-quoted
- * strings or backslash escapes. If the producer ever changes shape, audit
- * this splitter.
+ * `runSql()` from `@wp-playground/blueprints` ignores `$wpdb->query()`
+ * return values and `$wpdb->last_error`, so a failing dump looks identical
+ * to a successful import. This loop tracks per-statement results; in debug
+ * mode the first N failures are surfaced.
  */
-async function runSqlVerbose(
+async function runSqlFromDisk(
 	client: PlaygroundClient,
-	sql: string,
+	sqlPath: string,
+	debugMode: boolean,
 ): Promise<void> {
 	const docroot = await client.documentRoot;
-	// Round-tripping the SQL via a temp file (rather than embedding it as a
-	// PHP string literal) avoids JSON-vs-PHP escape rule mismatches and
-	// keeps memory use bounded for large dumps.
-	const sqlPath = '/tmp/lse-verbose-import.sql';
-	await client.writeFile(sqlPath, new TextEncoder().encode(sql));
 
 	const result = await client.run({
 		code: `<?php
@@ -258,7 +237,7 @@ async function runSqlVerbose(
 			$errors = array();
 			$max_errors = 20;
 
-			$exec = function ($stmt) use (&$wpdb, &$ok, &$fail, &$errors, $max_errors) {
+			$run_stmt = function ($stmt) use (&$wpdb, &$ok, &$fail, &$errors, $max_errors) {
 				$stmt = trim($stmt);
 				if ($stmt === '' || $stmt === ';') return;
 				$wpdb->last_error = '';
@@ -292,7 +271,7 @@ async function runSqlVerbose(
 					if ($c === "'") {
 						$in_str = true;
 					} elseif ($c === ';') {
-						$exec(substr($sql, $start, $i - $start + 1));
+						$run_stmt(substr($sql, $start, $i - $start + 1));
 						$start = $i + 1;
 					}
 				} else {
@@ -307,7 +286,7 @@ async function runSqlVerbose(
 				$i++;
 			}
 			if ($start < $len) {
-				$exec(substr($sql, $start));
+				$run_stmt(substr($sql, $start));
 			}
 
 			echo json_encode(array(
@@ -317,6 +296,7 @@ async function runSqlVerbose(
 			));
 		`,
 	});
+
 	const summary = JSON.parse(result.text) as {
 		ok: number;
 		fail: number;
@@ -326,8 +306,15 @@ async function runSqlVerbose(
 		console.warn(
 			`[live-sandbox-editor] DB import: ${summary.ok} ok, ${summary.fail} failed`,
 		);
-		for (const e of summary.sampleErrors) {
-			console.warn('[live-sandbox-editor] failed stmt:', e.error, '\n', e.sql);
+		if (debugMode) {
+			for (const e of summary.sampleErrors) {
+				console.warn(
+					'[live-sandbox-editor] failed stmt:',
+					e.error,
+					'\n',
+					e.sql,
+				);
+			}
 		}
 	} else {
 		console.log(
@@ -336,7 +323,7 @@ async function runSqlVerbose(
 	}
 }
 
-async function fixSiteUrl(client: PlaygroundClient): Promise<void> {
+async function applyPostImportFixups(client: PlaygroundClient): Promise<void> {
 	const docroot = await client.documentRoot;
 	const playgroundUrl = await client.absoluteUrl;
 
@@ -345,10 +332,19 @@ async function fixSiteUrl(client: PlaygroundClient): Promise<void> {
 			require('${docroot}/wp-load.php');
 			update_option('siteurl', '${playgroundUrl}');
 			update_option('home', '${playgroundUrl}');
+
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+
+			// Match by main-file postfix — the WP plugin dir name isn't stable.
+			$active   = (array) get_option('active_plugins', array());
+			$sitewide = is_multisite() ? array_keys((array) get_site_option('active_sitewide_plugins', array())) : array();
+			$entries  = array_filter(array_unique(array_merge($active, $sitewide)), static function ($entry) {
+				return str_ends_with($entry, '/live-sandbox-editor.php');
+			});
+
+			if ($entries) {
+				deactivate_plugins(array_values($entries), true);
+			}
 		`,
 	});
-}
-
-function base64ToBytes(b64: string): Uint8Array {
-	return Uint8Array.fromBase64(b64);
 }
