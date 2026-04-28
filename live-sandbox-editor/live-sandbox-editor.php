@@ -245,6 +245,9 @@ function stream_ndjson_emit( array $record ): void {
  * bounded by chunk size (no per-file accumulation, no response array).
  *
  * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+ *
+ * @param  WP_REST_Request $request Request.
+ * @return WP_Error|void
  */
 function rest_reprint_files( WP_REST_Request $request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 	maybe_load_reprint();
@@ -357,6 +360,8 @@ function rest_reprint_files( WP_REST_Request $request ) { // phpcs:ignore Generi
  * largest single fragment (~max_allowed_packet).
  *
  * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+ *
+ * @param  WP_REST_Request $request Request.
  */
 function rest_reprint_db( WP_REST_Request $request ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 	maybe_load_reprint();
