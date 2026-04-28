@@ -17,8 +17,11 @@
 namespace Live_Sandbox_Editor;
 
 use FileTreeProducer;
+use RecursiveCallbackFilterIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use WP_Error;
+use SplFileInfo;
 use WP_REST_Request;
 use WordPress\DataLiberation\MySQLDumpProducer;
 
@@ -243,7 +246,7 @@ function stream_ndjson_emit( array $record ): void {
  *
  * @SuppressWarnings(PHPMD.UnusedFormalParameter)
  */
-function rest_reprint_files( WP_REST_Request $request ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+function rest_reprint_files( WP_REST_Request $request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 	maybe_load_reprint();
 
 	if ( ! class_exists( 'FileTreeProducer' ) ) {
@@ -255,10 +258,31 @@ function rest_reprint_files( WP_REST_Request $request ): void { // phpcs:ignore 
 
 	$wp_content_dir = rtrim( WP_CONTENT_DIR, '/' );
 
+	// realpath so the comparison survives symlinked plugin installs.
+	$plugin_dir = realpath( __DIR__ );
+	if ( false === $plugin_dir ) {
+		return new WP_Error( 'plugin_path_unresolved', 'Could not resolve plugin directory.', array( 'status' => 500 ) );
+	}
+
+	// Build the full path list that FileTreeProducer requires on every request.
+	// Directory iteration is fast; the producer handles cursor-based positioning.
 	$paths = array();
 	try {
-		$rdi = new RecursiveDirectoryIterator( $wp_content_dir, RecursiveDirectoryIterator::SKIP_DOTS );
-		$rii = new RecursiveIteratorIterator( $rdi, RecursiveIteratorIterator::SELF_FIRST );
+		$rdi      = new RecursiveDirectoryIterator( $wp_content_dir, RecursiveDirectoryIterator::SKIP_DOTS );
+		$filtered = new RecursiveCallbackFilterIterator(
+			$rdi,
+			static function ( SplFileInfo $current ) use ( $plugin_dir ): bool {
+				$path = $current->getRealPath();
+
+				if ( false === $path ) {
+					return true;
+				}
+
+				return $path !== $plugin_dir
+					&& ! str_starts_with( $path, $plugin_dir . DIRECTORY_SEPARATOR );
+			}
+		);
+		$rii      = new RecursiveIteratorIterator( $filtered, RecursiveIteratorIterator::SELF_FIRST );
 		foreach ( $rii as $file ) {
 			$paths[] = $file->getPathname();
 		}
