@@ -13,6 +13,7 @@
 	"author": "sirreal",
 	"license": "GPL-2.0",
 	"dependencies": {
+		"@wp-playground/blueprints": "^3.1.20",
 		"@wp-playground/client": "^3.1.20",
 		"monaco-editor": "^0.52.0"
 	},
