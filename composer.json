@@ -7,19 +7,15 @@
 		"install-plugin-vendor": [
 			"@composer install --working-dir=live-sandbox-editor --no-scripts --no-dev"
 		],
-		"post-install-cmd": [
-			"@install-plugin-vendor"
-		],
-		"post-update-cmd": [
-			"@install-plugin-vendor"
-		]
+		"post-install-cmd": ["@install-plugin-vendor"],
+		"post-update-cmd": ["@install-plugin-vendor"]
 	},
 	"scripts-descriptions": {
 		"install-plugin-vendor": "Install the live-sandbox-editor plugin's runtime dependencies (from live-sandbox-editor/plugin-composer.json) into live-sandbox-editor/vendor/. Runs automatically after every composer install/update at the repo root."
 	},
 	"config": {
 		"allow-plugins": {
-		"dealerdirect/phpcodesniffer-composer-installer": true
+			"dealerdirect/phpcodesniffer-composer-installer": true
 		}
 	}
 }
