@@ -76,7 +76,7 @@ function enqueue_assets( string $hook_suffix ): void {
 		SLUG,
 		plugins_url( 'build/main.js', __FILE__ ),
 		array(),
-		VERSION
+		asset_version( 'build/main.js' )
 	);
 
 	add_filter(
@@ -104,8 +104,32 @@ function enqueue_assets( string $hook_suffix ): void {
 		}
 	);
 
-	wp_enqueue_style( SLUG, plugins_url( 'style.css', __FILE__ ), array(), VERSION );
-	wp_enqueue_style( SLUG . '-monaco', plugins_url( 'build/main.css', __FILE__ ), array(), VERSION );
+	wp_enqueue_style(
+		SLUG,
+		plugins_url( 'style.css', __FILE__ ),
+		array(),
+		asset_version( 'style.css' )
+	);
+	wp_enqueue_style(
+		SLUG . '-monaco',
+		plugins_url( 'build/monaco.css', __FILE__ ),
+		array(),
+		asset_version( 'build/monaco.css' )
+	);
+}
+
+/**
+ * Get a cache-busting version for a plugin asset.
+ *
+ * @param string $relative_path Asset path relative to this plugin directory.
+ * @return string Asset version.
+ */
+function asset_version( string $relative_path ): string {
+	$path = __DIR__ . '/' . ltrim( $relative_path, '/' );
+	if ( file_exists( $path ) ) {
+		return (string) filemtime( $path );
+	}
+	return VERSION;
 }
 
 /** Register the admin menu page. */
@@ -135,7 +159,7 @@ function reprint_notice(): void {
 		return;
 	}
 	echo '<div class="notice notice-error"><p>';
-	esc_html_e( 'Live Sandbox Editor: Reprint classes could not be loaded. Run composer install in the plugin directory.', 'live-sandbox-editor' );
+	esc_html_e( 'Live Sandbox Editor: Reprint classes could not be loaded. Run composer install in the project root directory.', 'live-sandbox-editor' );
 	echo '</p></div>';
 }
 

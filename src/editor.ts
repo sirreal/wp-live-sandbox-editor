@@ -20,7 +20,7 @@ export function initEditor(
 
 export function loadFileIntoEditor(path: string, content: string): void {
 	if (models.has(path)) return;
-	const uri = monaco.Uri.parse('file://' + path);
+	const uri = monaco.Uri.parse(`file://${path}`);
 	const model = monaco.editor.createModel(content, detectLanguage(path), uri);
 	models.set(path, model);
 }
