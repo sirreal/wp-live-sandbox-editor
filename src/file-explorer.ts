@@ -55,9 +55,9 @@ async function renderDir(
 		} else {
 			item.addEventListener('click', (e) => {
 				e.stopPropagation();
-				document.querySelectorAll('.lse-tree-item.selected').forEach((el) => {
+				for (const el of document.querySelectorAll('.lse-tree-item.selected')) {
 					el.classList.remove('selected');
-				});
+				}
 				item.classList.add('selected');
 				onFileOpen(entry);
 			});
