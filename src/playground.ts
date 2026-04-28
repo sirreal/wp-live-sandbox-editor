@@ -117,8 +117,7 @@ async function logSqliteIntegrationVersion(
  * disk. Files are appended chunk-by-chunk via FILE_APPEND inside Playground;
  * the JS heap never holds a full file or a buffered response body.
  *
- * Returns true on success, false if the server reports the Reprint classes
- * are unavailable (handled gracefully so the rest of the boot continues).
+ * Returns true on success, false if the server reports an error.
  */
 async function importReprintFiles(client: PlaygroundClient): Promise<boolean> {
 	const { restUrl, nonce } = getAppData();
@@ -127,13 +126,6 @@ async function importReprintFiles(client: PlaygroundClient): Promise<boolean> {
 	const res = await fetch(`${restUrl}/reprint-files`, {
 		headers: { 'X-WP-Nonce': nonce, Accept: 'application/x-ndjson' },
 	});
-
-	if (res.status === 503) {
-		console.warn(
-			'[live-sandbox-editor] Reprint classes unavailable — skipping file import.',
-		);
-		return false;
-	}
 
 	if (!res.ok) {
 		const errorText = await getErrorResponseText(res);
@@ -176,13 +168,6 @@ async function importReprintDb(
 	const res = await fetch(`${restUrl}/reprint-db`, {
 		headers: { 'X-WP-Nonce': nonce, Accept: 'application/x-ndjson' },
 	});
-
-	if (res.status === 503) {
-		console.warn(
-			'[live-sandbox-editor] Reprint classes unavailable — skipping DB import.',
-		);
-		return;
-	}
 
 	if (!res.ok) {
 		const errorText = await getErrorResponseText(res);

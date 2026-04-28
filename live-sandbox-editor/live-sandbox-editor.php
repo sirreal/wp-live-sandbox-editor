@@ -361,7 +361,7 @@ function rest_reprint_db( WP_REST_Request $request ): void { // phpcs:ignore Gen
 			array( \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION )
 		);
 	} catch ( \PDOException $e ) {
-		http_response_code( 503 );
+		http_response_code( 500 );
 		stream_ndjson_setup();
 		stream_ndjson_emit( array( 'type' => 'err', 'message' => 'db_connect: ' . $e->getMessage() ) );
 		exit;
