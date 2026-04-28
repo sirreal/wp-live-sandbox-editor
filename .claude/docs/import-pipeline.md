@@ -36,24 +36,22 @@ do {
 
 ## `GET /reprint-db`
 
-Full MySQL dump via `MySQLDumpProducer`, **base64-encoded** and returned as a JSON string literal.
+Full MySQL dump via `MySQLDumpProducer`, returned as a raw SQL string. WP REST wraps the body in a JSON string literal on the wire; the JS consumer calls `await res.json()` to recover the original SQL — no further decoding required.
 
 - DSN: `build_pdo_dsn()` from the Reprint `files` autoload if present, else fallback `mysql:host=…;dbname=…;charset=utf8mb4`.
 - No pagination today.
 - `MySQLDumpProducer` exposes `next_sql_fragment()` / `get_sql_fragment()`, which return **statement-bounded** fragments (not raw byte chunks). If you add a cursor, accumulate fragments until a byte budget, flush, and reuse the producer's re-entrancy mechanism.
-- **Base64 is mandatory.** WP REST always JSON-encodes the response body regardless of the `Content-Type` header, and JSON encoding mangles raw SQL (newlines, embedded quotes, `\u` sequences in string literals). Wrapping the dump in base64 round-trips losslessly through the JSON envelope. Do not "optimise" this away by changing the transport.
 
-JS side hands the decoded bytes to `runSql` from `@wp-playground/blueprints`:
+JS side hands the SQL string to `runSql` from `@wp-playground/blueprints`:
 ```ts
-const b64 = (await res.json()) as string;
-const sqlBytes = base64ToBytes(b64);
-const sqlFile = new File([sqlBytes], 'reprint-import.sql', { type: 'application/sql' });
+const sql = (await res.json()) as string;
+const sqlFile = new File([sql], 'reprint-import.sql', { type: 'application/sql' });
 await runSql(client, { sql: sqlFile });
 ```
 
 `runSql` swallows per-statement failures (it loops `$wpdb->query($q)` and never inspects `last_error`). When `WP_DEBUG` or `SCRIPT_DEBUG` is on, `playground.ts` swaps in `runSqlVerbose`, which executes statements one-by-one and surfaces the first 20 failures to the console. The verbose path uses a hand-rolled splitter that's only correct for Reprint's output (single-quoted `FROM_BASE64('…')` literals — base64 alphabet contains no `'`, `;`, or `\n`); it is **not** a general-purpose SQL splitter.
 
-Pagination is not implemented; `MySQLDumpProducer::next_sql_fragment()` returns statement-bounded fragments, which would make cursor-style chunking straightforward if ever needed. Changing the wire format (e.g. dropping base64, switching to chunked streaming) is an ask-before change — the current contract has no version marker.
+Pagination is not implemented; `MySQLDumpProducer::next_sql_fragment()` returns statement-bounded fragments, which would make cursor-style chunking straightforward if ever needed. Changing the wire format (e.g. switching to chunked streaming) is an ask-before change — the current contract has no version marker.
 
 ## Post-import step
 
