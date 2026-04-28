@@ -247,7 +247,7 @@ function rest_reprint_files( WP_REST_Request $request ): void { // phpcs:ignore 
 	maybe_load_reprint();
 
 	if ( ! class_exists( 'FileTreeProducer' ) ) {
-		http_response_code( 503 );
+		http_response_code( 500 );
 		stream_ndjson_setup();
 		stream_ndjson_emit( array( 'type' => 'err', 'message' => 'Reprint classes not available.' ) );
 		exit;
@@ -263,7 +263,7 @@ function rest_reprint_files( WP_REST_Request $request ): void { // phpcs:ignore 
 			$paths[] = $file->getPathname();
 		}
 	} catch ( \UnexpectedValueException $e ) {
-		http_response_code( 503 );
+		http_response_code( 500 );
 		stream_ndjson_setup();
 		stream_ndjson_emit( array( 'type' => 'err', 'message' => 'scan_error: ' . $e->getMessage() ) );
 		exit;
