@@ -45,8 +45,8 @@ export async function initPlayground(
 		onStatus('Importing database…');
 		await importReprintDb(client, debugMode);
 
-		onStatus('Fixing site URL…');
-		await fixSiteUrl(client);
+		onStatus('Finalizing sandbox…');
+		await applyPostImportFixups(client);
 	}
 
 	await client.goTo('/');
@@ -336,7 +336,7 @@ async function runSqlVerbose(
 	}
 }
 
-async function fixSiteUrl(client: PlaygroundClient): Promise<void> {
+async function applyPostImportFixups(client: PlaygroundClient): Promise<void> {
 	const docroot = await client.documentRoot;
 	const playgroundUrl = await client.absoluteUrl;
 
@@ -345,6 +345,12 @@ async function fixSiteUrl(client: PlaygroundClient): Promise<void> {
 			require('${docroot}/wp-load.php');
 			update_option('siteurl', '${playgroundUrl}');
 			update_option('home', '${playgroundUrl}');
+
+			// Match by main-file postfix — the WP plugin dir name isn't stable.
+			$active = (array) get_option('active_plugins', array());
+			update_option('active_plugins', array_values(array_filter($active, static function ($entry) {
+				return ! str_ends_with($entry, '/live-sandbox-editor.php');
+			})));
 		`,
 	});
 }
