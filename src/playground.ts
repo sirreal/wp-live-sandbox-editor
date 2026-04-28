@@ -346,11 +346,18 @@ async function applyPostImportFixups(client: PlaygroundClient): Promise<void> {
 			update_option('siteurl', '${playgroundUrl}');
 			update_option('home', '${playgroundUrl}');
 
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+
 			// Match by main-file postfix — the WP plugin dir name isn't stable.
-			$active = (array) get_option('active_plugins', array());
-			update_option('active_plugins', array_values(array_filter($active, static function ($entry) {
-				return ! str_ends_with($entry, '/live-sandbox-editor.php');
-			})));
+			$active   = (array) get_option('active_plugins', array());
+			$sitewide = is_multisite() ? array_keys((array) get_site_option('active_sitewide_plugins', array())) : array();
+			$entries  = array_filter(array_unique(array_merge($active, $sitewide)), static function ($entry) {
+				return str_ends_with($entry, '/live-sandbox-editor.php');
+			});
+
+			if ($entries) {
+				deactivate_plugins(array_values($entries), true);
+			}
 		`,
 	});
 }

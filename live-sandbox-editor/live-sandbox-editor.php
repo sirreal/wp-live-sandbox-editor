@@ -217,6 +217,9 @@ function rest_reprint_files( WP_REST_Request $request ): WP_REST_Response|WP_Err
 
 	// realpath so the comparison survives symlinked plugin installs.
 	$plugin_dir = realpath( __DIR__ );
+	if ( false === $plugin_dir ) {
+		return new WP_Error( 'plugin_path_unresolved', 'Could not resolve plugin directory.', array( 'status' => 500 ) );
+	}
 
 	// Build the full path list that FileTreeProducer requires on every request.
 	// Directory iteration is fast; the producer handles cursor-based positioning.
@@ -227,6 +230,11 @@ function rest_reprint_files( WP_REST_Request $request ): WP_REST_Response|WP_Err
 			$rdi,
 			static function ( SplFileInfo $current ) use ( $plugin_dir ): bool {
 				$path = $current->getRealPath();
+
+				if ( false === $path ) {
+					return true;
+				}
+
 				return $path !== $plugin_dir
 					&& ! str_starts_with( $path, $plugin_dir . DIRECTORY_SEPARATOR );
 			}
