@@ -20,7 +20,9 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.13",
+		"@php-wasm/web": "^3.1.21",
 		"@tsconfig/strictest": "^2.0.5",
+		"@wp-playground/remote": "^3.1.21",
 		"typescript": "npm:@typescript/native-preview@beta",
 		"vite": "^8.x"
 	},
