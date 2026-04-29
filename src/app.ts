@@ -1,4 +1,3 @@
-import type { PlaygroundClient } from '@wp-playground/client';
 import {
 	addSaveCommand,
 	initEditor,
@@ -7,10 +6,8 @@ import {
 } from './editor.js';
 import { initFileExplorer } from './file-explorer.js';
 import { readFile, writeFile } from './filesystem.js';
-import { initPlayground } from './playground.js';
-import { setClient } from './playground-client-ref.js';
-import { sandboxState } from './store.js';
-import { getAppData, type OpenFile } from './types.js';
+import { sandbox } from './store.js';
+import type { OpenFile } from './types.js';
 
 export async function initApp(root: HTMLElement): Promise<void> {
 	const tabStrip = mustGet(root, 'lse-tabs');
@@ -70,35 +67,8 @@ export async function initApp(root: HTMLElement): Promise<void> {
 		renderTabs();
 	}
 
-	// --- Init Playground ---
-	let playgroundClient: PlaygroundClient | null = null;
-
-	const onStatus = (status: string): void => {
-		sandboxState.statusText = status;
-	};
-
-	const { scriptDebug, wpDebug } = getAppData();
-
-	try {
-		playgroundClient = await initPlayground(iframe, onStatus, {
-			scriptDebug,
-			wpDebug,
-		});
-	} catch (err) {
-		sandboxState.statusText = 'Playground failed to initialize.';
-		console.error('[live-sandbox-editor] Playground init error:', err);
-		return;
-	}
-
-	const client = playgroundClient;
-	setClient(client);
-
-	sandboxState.statusText = 'Ready';
-	sandboxState.isReady = true;
-	sandboxState.url = await client.getCurrentURL();
-	await client.onNavigation((path: string) => {
-		sandboxState.url = path;
-	});
+	const client = await sandbox.actions.boot(iframe);
+	if (!client) return;
 
 	const docroot = await client.documentRoot;
 	const wpContentPath = `${docroot}/wp-content`;
@@ -115,7 +85,7 @@ export async function initApp(root: HTMLElement): Promise<void> {
 		}
 
 		activateTab(filePath);
-		sandboxState.statusText = filePath;
+		sandbox.state.statusText = filePath;
 	});
 
 	// --- Save handler ---
@@ -123,9 +93,9 @@ export async function initApp(root: HTMLElement): Promise<void> {
 		await writeFile(client, path, content);
 		const currentUrl = await client.getCurrentURL();
 		await client.goTo(currentUrl);
-		sandboxState.statusText = `Saved: ${path.split('/').pop()}`;
+		sandbox.state.statusText = `Saved: ${path.split('/').pop()}`;
 		setTimeout(() => {
-			sandboxState.statusText = 'Ready';
+			sandbox.state.statusText = 'Ready';
 		}, 2000);
 	});
 }
