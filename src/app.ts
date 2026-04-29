@@ -10,13 +10,13 @@ import { sandbox } from './store.js';
 import type { OpenFile } from './types.js';
 
 export async function initApp(root: HTMLElement): Promise<void> {
-	const tabStrip = mustGet(root, 'lse-tabs');
-	const monacoContainer = mustGet(root, 'lse-monaco');
-	const fileTreeBody = mustGet(root, 'lse-file-tree-body');
-	const dragHandle = mustGet(root, 'lse-drag-handle');
+	const tabStrip = mustQuery(root, '#lse-tabs');
+	const monacoContainer = mustQuery(root, '#lse-monaco');
+	const fileTreeBody = mustQuery(root, '#lse-file-tree-body');
+	const dragHandle = mustQuery(root, '#lse-drag-handle');
 	const editorPane = mustQuery(root, '.lse-editor-pane');
 	const previewPane = mustQuery(root, '.lse-preview-pane');
-	const iframe = mustGet(root, 'lse-preview-iframe') as HTMLIFrameElement;
+	const iframe = mustQuery(root, '#lse-preview-iframe') as HTMLIFrameElement;
 
 	initEditor(monacoContainer);
 	initDragHandle(dragHandle, editorPane, previewPane);
@@ -104,14 +104,6 @@ function el(tag: string, className?: string): HTMLElement {
 	const element = document.createElement(tag);
 	if (className) element.className = className;
 	return element;
-}
-
-function mustGet(root: HTMLElement, id: string): HTMLElement {
-	const found = root.querySelector(`#${id}`);
-	if (!(found instanceof HTMLElement)) {
-		throw new Error(`[live-sandbox-editor] Missing element #${id}`);
-	}
-	return found;
 }
 
 function mustQuery(root: HTMLElement, selector: string): HTMLElement {
