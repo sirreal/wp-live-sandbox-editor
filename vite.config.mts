@@ -29,8 +29,13 @@ export default defineConfig({
 				// Pull monaco-editor's static graph into its own chunk; lazy
 				// language modes stay as their own dynamic chunks and share
 				// `./monaco-[hash].js` with main.js.
-				manualChunks: {
-					monaco: ['monaco-editor'],
+				manualChunks(id) {
+					if (!id.includes('node_modules/monaco-editor/')) return;
+					// Lazy language mode entry points stay as their own
+					// dynamic chunks; everything else in monaco-editor's
+					// static graph collapses into `monaco`.
+					if (/\/(?:cssMode|tsMode|htmlMode|jsonMode)\.js$/.test(id)) return;
+					return 'monaco';
 				},
 			},
 		},
