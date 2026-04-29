@@ -30,7 +30,7 @@ const MARKER_ERR  = 'ERR';
 
 /**
  * Disable buffering, compression and timeouts so the body is streamed
- * unmodified. Mirrors the previous NDJSON setup.
+ * unmodified.
  */
 function setup(): void {
 	while ( ob_get_level() > 0 ) {
