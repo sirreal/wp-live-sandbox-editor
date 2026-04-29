@@ -34,6 +34,8 @@ namespace Live_Sandbox_Editor;
 					type="button"
 					class="lse-toolbar-btn"
 					data-wp-on--click="actions.refresh"
+					data-wp-bind--disabled="state.notReady"
+					disabled
 					title="Refresh"
 					aria-label="Refresh"
 				>↺</button>
@@ -43,10 +45,12 @@ namespace Live_Sandbox_Editor;
 						class="lse-url-input"
 						placeholder="/wp-admin/"
 						data-wp-bind--value="state.url"
+						data-wp-bind--disabled="state.notReady"
 						data-wp-on--input="actions.setUrl"
 						aria-label="URL to visit in the playground"
 						autocomplete="off"
 						spellcheck="false"
+						disabled
 					>
 				</form>
 			</div>

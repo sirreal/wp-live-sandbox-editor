@@ -207,6 +207,17 @@ body.toplevel_page_live-sandbox-editor #wpbody-content {
 	color: #fff;
 }
 
+.lse-toolbar-btn:disabled,
+.lse-url-input:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.lse-toolbar-btn:disabled:hover {
+	background: transparent;
+	color: #ccc;
+}
+
 .lse-url-form {
 	flex: 1;
 	min-width: 0;

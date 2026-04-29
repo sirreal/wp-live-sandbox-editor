@@ -7,6 +7,7 @@ export interface SandboxState {
 	url: string;
 	statusText: string;
 	isReady: boolean;
+	readonly notReady: boolean;
 }
 
 let client: PlaygroundClient | null = null;
@@ -16,6 +17,9 @@ export const sandbox = store('live-sandbox-editor/sandbox', {
 		url: '',
 		statusText: '',
 		isReady: false,
+		get notReady(): boolean {
+			return !sandbox.state.isReady;
+		},
 	} as SandboxState,
 	actions: {
 		setUrl(event: Event): void {
