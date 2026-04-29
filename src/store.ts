@@ -56,9 +56,13 @@ export const sandbox = store('live-sandbox-editor/sandbox', {
 				return null;
 			}
 
+			sandbox.state.statusText = 'Refreshing…';
+			const currentUrl = (yield client.getCurrentURL()) as string;
+			yield client.goTo(currentUrl);
+
 			sandbox.state.statusText = 'Ready';
 			sandbox.state.isReady = true;
-			sandbox.state.url = (yield client.getCurrentURL()) as string;
+			sandbox.state.url = currentUrl;
 			yield client.onNavigation((path: string) => {
 				sandbox.state.url = path;
 			});
