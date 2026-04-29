@@ -1,8 +1,6 @@
 {
 	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-	"organizeImports": {
-		"enabled": true
-	},
+	"assist": { "actions": { "source": { "organizeImports": "on" } } },
 	"linter": {
 		"enabled": true,
 		"rules": {
@@ -19,13 +17,12 @@
 	},
 	"formatter": {},
 	"files": {
-		"ignore": [
-			".claude",
-			"vendor",
-			"plugin-repo",
-			"wordpress",
-			"live-sandbox-editor/build",
-			"live-sandbox-editor/vendor"
+		"includes": [
+			"*",
+			"src/**",
+			"live-sandbox-editor/**",
+			"!live-sandbox-editor/build",
+			"!live-sandbox-editor/vendor"
 		]
 	}
 }

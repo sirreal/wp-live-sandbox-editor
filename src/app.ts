@@ -8,7 +8,7 @@ import {
 import { initFileExplorer } from './file-explorer.js';
 import { readFile, writeFile } from './filesystem.js';
 import { initPlayground } from './playground.js';
-import { type OpenFile, getAppData } from './types.js';
+import { getAppData, type OpenFile } from './types.js';
 
 export async function initApp(root: HTMLElement): Promise<void> {
 	// --- Build DOM ---
