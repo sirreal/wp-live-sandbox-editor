@@ -49,7 +49,7 @@ export async function initPlayground(
 		await applyPostImportFixups(client);
 	}
 
-	await client.goTo('/');
+	await client.goTo('/wp-admin/');
 	return client;
 }
 
