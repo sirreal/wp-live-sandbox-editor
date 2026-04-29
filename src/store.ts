@@ -50,10 +50,7 @@ export const sandbox = store('live-sandbox-editor/sandbox', {
 				)) as PlaygroundClient;
 			} catch (err) {
 				sandbox.state.statusText = 'Playground failed to initialize.';
-				console.error(
-					'[live-sandbox-editor] Playground init error:',
-					err,
-				);
+				console.error('[live-sandbox-editor] Playground init error:', err);
 				return null;
 			}
 
