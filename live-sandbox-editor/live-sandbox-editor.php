@@ -17,16 +17,14 @@
 namespace Live_Sandbox_Editor;
 
 use FileTreeProducer;
-use RecursiveCallbackFilterIterator;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
-use WP_Error;
-use SplFileInfo;
 use WP_REST_Request;
 use WordPress\DataLiberation\MySQLDumpProducer;
 
 const SLUG    = 'live-sandbox-editor';
 const VERSION = '0.1';
+
+require_once __DIR__ . '/inc/sync-stream.php';
+require_once __DIR__ . '/inc/manifest.php';
 
 /**
  * Load vendored Reprint classes only if they are not already defined.
@@ -164,242 +162,253 @@ function reprint_notice(): void {
 
 /** Register REST API routes. */
 function register_rest_routes(): void {
+	$can_manage = static fn() => current_user_can( 'manage_options' );
+
 	register_rest_route(
 		SLUG . '/v1',
-		'/reprint-files',
+		'/sync-manifest',
 		array(
 			'methods'             => 'GET',
-			'permission_callback' => fn() => current_user_can( 'manage_options' ),
-			'callback'            => __NAMESPACE__ . '\\rest_reprint_files',
+			'permission_callback' => $can_manage,
+			'callback'            => __NAMESPACE__ . '\\rest_sync_manifest',
 		)
 	);
 
 	register_rest_route(
 		SLUG . '/v1',
-		'/reprint-db',
+		'/sync-files',
 		array(
-			'methods'             => 'GET',
-			'permission_callback' => fn() => current_user_can( 'manage_options' ),
-			'callback'            => __NAMESPACE__ . '\\rest_reprint_db',
+			'methods'             => array( 'GET', 'POST' ),
+			'permission_callback' => $can_manage,
+			'callback'            => __NAMESPACE__ . '\\rest_sync_files',
+		)
+	);
+
+	register_rest_route(
+		SLUG . '/v1',
+		'/sync-db',
+		array(
+			'methods'             => array( 'GET', 'POST' ),
+			'permission_callback' => $can_manage,
+			'callback'            => __NAMESPACE__ . '\\rest_sync_db',
 		)
 	);
 }
 
 /**
- * Prepare a streaming NDJSON response: drop output buffers, disable
- * compression/buffering middleware, send the header set, and return.
- *
- * Caller is responsible for echoing one JSON object per line (terminated
- * with "\n"), calling flush() after each, and exiting before the WP REST
- * dispatcher tries to wrap a return value.
- */
-function stream_ndjson_setup(): void {
-	while ( ob_get_level() > 0 ) {
-		ob_end_clean();
-	}
-	@ini_set( 'zlib.output_compression', '0' ); // phpcs:ignore WordPress.PHP.IniSet.Risky
-	if ( function_exists( 'apache_setenv' ) ) {
-		@apache_setenv( 'no-gzip', '1' );
-	}
-	// Streaming a full wp-content / DB dump comfortably exceeds the default
-	// 30s max_execution_time. Disable it for this request and call
-	// set_time_limit() again periodically inside the loop in case the host
-	// silently re-imposes a per-iteration timer.
-	@set_time_limit( 0 );
-	// Keep producing data even if the browser tab closes — half-written files
-	// in Playground are useless, so we'd rather finish the stream.
-	ignore_user_abort( true );
-	if ( function_exists( 'session_write_close' ) ) {
-		@session_write_close();
-	}
-	nocache_headers();
-	header( 'Content-Type: application/x-ndjson; charset=utf-8' );
-	header( 'Cache-Control: no-cache, no-store, no-transform, must-revalidate' );
-	header( 'Pragma: no-cache' );
-	// nginx: opt this response out of proxy_buffering.
-	header( 'X-Accel-Buffering: no' );
-	// Defeat compression middleware that otherwise buffers entire body.
-	header( 'Content-Encoding: identity' );
-	header( 'X-Content-Type-Options: nosniff' );
-	// Deliberately no Content-Length — its absence forces chunked transfer.
-}
-
-/**
- * Emit a single NDJSON record and flush.
- *
- * @param array $record Record payload — JSON-encoded as one line.
- */
-function stream_ndjson_emit( array $record ): void {
-	echo wp_json_encode( $record, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_LINE_TERMINATORS ), "\n";
-	flush();
-}
-
-/**
- * REST callback: stream wp-content files as NDJSON.
- *
- * Each line is one chunk of one file:
- *   { "type":"file", "path":"/wp-content/…", "b64":"…", "seq":N, "final":bool }
- *
- * The handler bypasses WP_REST_Response and exits directly so the body is
- * streamed without WP's JSON-envelope buffering. PHP peak memory stays
- * bounded by chunk size (no per-file accumulation, no response array).
+ * REST callback: return the default sync manifest plus the host site URL
+ * and uploads URL, so the JS side can decide how to drive the sync and
+ * how to rewrite media URLs after import.
  *
  * @SuppressWarnings(PHPMD.UnusedFormalParameter)
  *
  * @param  WP_REST_Request $request Request.
- * @return WP_Error|void
+ * @return array
  */
-function rest_reprint_files( WP_REST_Request $request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+function rest_sync_manifest( WP_REST_Request $request ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	$uploads     = wp_upload_dir( null, false );
+	$uploads_url = is_array( $uploads ) && ! empty( $uploads['baseurl'] ) ? (string) $uploads['baseurl'] : '';
+	return array(
+		'manifest'   => Manifest\defaults(),
+		'siteUrl'    => (string) get_site_url(),
+		'uploadsUrl' => $uploads_url,
+	);
+}
+
+/**
+ * REST callback: stream selected files using the chunked-terminator wire
+ * format. The handler exits directly so the body is streamed without WP's
+ * JSON-envelope buffering.
+ *
+ * @param  WP_REST_Request $request Request.
+ */
+function rest_sync_files( WP_REST_Request $request ): void {
 	maybe_load_reprint();
+	Sync_Stream\setup();
 
 	if ( ! class_exists( 'FileTreeProducer' ) ) {
 		http_response_code( 500 );
-		stream_ndjson_setup();
-		stream_ndjson_emit( array( 'type' => 'err', 'message' => 'Reprint classes not available.' ) );
+		Sync_Stream\emit_marker( Sync_Stream\MARKER_ERR, 'Reprint classes not available.' );
+		Sync_Stream\emit_marker( Sync_Stream\MARKER_DONE );
 		exit;
 	}
 
-	$wp_content_dir = rtrim( WP_CONTENT_DIR, '/' );
+	$manifest = Manifest\from_request( $request );
 
-	// realpath so the comparison survives symlinked plugin installs.
-	$plugin_dir = realpath( __DIR__ );
-	if ( false === $plugin_dir ) {
-		return new WP_Error( 'plugin_path_unresolved', 'Could not resolve plugin directory.', array( 'status' => 500 ) );
-	}
-
-	// Build the full path list that FileTreeProducer requires on every request.
-	// Directory iteration is fast; the producer handles cursor-based positioning.
-	$paths = array();
-	try {
-		$rdi      = new RecursiveDirectoryIterator( $wp_content_dir, RecursiveDirectoryIterator::SKIP_DOTS );
-		$filtered = new RecursiveCallbackFilterIterator(
-			$rdi,
-			static function ( SplFileInfo $current ) use ( $plugin_dir ): bool {
-				$path = $current->getRealPath();
-
-				if ( false === $path ) {
-					return true;
-				}
-
-				return $path !== $plugin_dir
-					&& ! str_starts_with( $path, $plugin_dir . DIRECTORY_SEPARATOR );
-			}
-		);
-		$rii      = new RecursiveIteratorIterator( $filtered, RecursiveIteratorIterator::SELF_FIRST );
-		foreach ( $rii as $file ) {
-			$paths[] = $file->getPathname();
-		}
-	} catch ( \UnexpectedValueException $e ) {
-		http_response_code( 500 );
-		stream_ndjson_setup();
-		stream_ndjson_emit( array( 'type' => 'err', 'message' => 'scan_error: ' . $e->getMessage() ) );
+	$entries = build_file_entries( $manifest );
+	if ( empty( $entries ) ) {
+		Sync_Stream\emit_marker( Sync_Stream\MARKER_DONE );
 		exit;
 	}
 
-	stream_ndjson_setup();
+	$paths       = array();
+	$logical_for = array();
+	foreach ( $entries as $tuple ) {
+		$paths[]                  = $tuple[0];
+		$logical_for[ $tuple[0] ] = $tuple[1];
+	}
 
-	// Small chunks keep PHP peak memory bounded regardless of file size; the
-	// underlying FileTreeProducer reads files in $chunk_size pieces.
+	// FileTreeProducer's `directories` argument is normalised but not
+	// enforced against `paths`; passing a sentinel value is fine.
 	$producer = new FileTreeProducer(
-		$wp_content_dir,
+		'/',
 		array(
 			'paths'      => $paths,
 			'chunk_size' => 256 * 1024,
 		)
 	);
 
-	$content_prefix_len = strlen( $wp_content_dir );
-	$emitted            = 0;
+	$encoder      = new Sync_Stream\B64_Streamer();
+	$emitted      = 0;
+	$current_path = null;
 
 	try {
 		while ( $producer->next_chunk() ) {
 			$chunk = $producer->get_current_chunk();
-			if ( ! $chunk || $chunk['type'] !== 'file' ) {
+			if ( ! $chunk || 'file' !== $chunk['type'] ) {
 				continue;
 			}
 
-			$rel = '/wp-content' . substr( $chunk['path'], $content_prefix_len );
+			$host_path = $chunk['path'];
+			$logical   = $logical_for[ $host_path ] ?? null;
+			if ( null === $logical ) {
+				continue;
+			}
 
-			stream_ndjson_emit(
-				array(
-					'type'  => 'file',
-					'path'  => $rel,
-					'b64'   => base64_encode( $chunk['data'] ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
-					'seq'   => (int) ( $chunk['offset'] ?? 0 ),
-					'final' => (bool) ( $chunk['is_last_chunk'] ?? false ),
-				)
-			);
+			if ( $current_path !== $logical ) {
+				if ( null !== $current_path ) {
+					$encoder->finalize();
+					Sync_Stream\emit_marker( Sync_Stream\MARKER_END );
+				}
+				Sync_Stream\emit_marker( Sync_Stream\MARKER_FILE, $logical );
+				$current_path = $logical;
+			}
 
-			// Reset the wall-clock budget every so often: some hosts reapply
-			// max_execution_time after each request hook even when we set 0
-			// up front, and the loop can run for minutes on big sites.
-			if ( ( ++$emitted % 64 ) === 0 ) {
+			$encoder->feed( $chunk['data'] );
+
+			if ( ! empty( $chunk['is_last_chunk'] ) ) {
+				$encoder->finalize();
+				Sync_Stream\emit_marker( Sync_Stream\MARKER_END );
+				$current_path = null;
+			}
+
+			++$emitted;
+			if ( 0 === ( $emitted % 64 ) ) {
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- set_time_limit may be disabled in php.ini; the silence is the intended fallback.
 				@set_time_limit( 0 );
 				if ( connection_aborted() ) {
 					exit;
 				}
 			}
 		}
+
+		if ( null !== $current_path ) {
+			$encoder->finalize();
+			Sync_Stream\emit_marker( Sync_Stream\MARKER_END );
+		}
 	} catch ( \Throwable $e ) {
-		stream_ndjson_emit( array( 'type' => 'err', 'message' => $e->getMessage() ) );
+		if ( ! headers_sent() ) {
+			http_response_code( 500 );
+		}
+		Sync_Stream\emit_marker( Sync_Stream\MARKER_ERR, $e->getMessage() );
+		Sync_Stream\emit_marker( Sync_Stream\MARKER_DONE );
 		exit;
 	}
 
-	stream_ndjson_emit( array( 'type' => 'end' ) );
+	Sync_Stream\emit_marker( Sync_Stream\MARKER_DONE );
 	exit;
 }
 
 /**
- * REST callback: stream a MySQL dump as NDJSON.
+ * Build the (host_path, logical_path) tuples to stream from a manifest.
  *
- * Each line is one SQL fragment from MySQLDumpProducer:
- *   { "type":"sql", "b64":"…" }
- *
- * Fragments are base64-encoded so embedded newlines/binary bytes don't
- * break NDJSON line framing. PHP peak memory stays bounded by the
- * largest single fragment (~max_allowed_packet).
- *
- * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+ * @param array{plugins:array<string>,themes:array<string>,uploads:bool} $manifest Normalized manifest.
+ * @return array<int,array{0:string,1:string}>
+ */
+function build_file_entries( array $manifest ): array {
+	$tuples = array();
+	foreach ( $manifest['plugins'] as $entry ) {
+		foreach ( Manifest\plugin_paths( $entry ) as $tuple ) {
+			$tuples[] = $tuple;
+		}
+	}
+	foreach ( $manifest['themes'] as $slug ) {
+		foreach ( Manifest\theme_paths( $slug ) as $tuple ) {
+			$tuples[] = $tuple;
+		}
+	}
+	if ( ! empty( $manifest['uploads'] ) ) {
+		foreach ( Manifest\uploads_paths() as $tuple ) {
+			$tuples[] = $tuple;
+		}
+	}
+
+	// Dedupe on host path — different manifest entries shouldn't double-emit a file.
+	$seen = array();
+	$out  = array();
+	foreach ( $tuples as $t ) {
+		if ( isset( $seen[ $t[0] ] ) ) {
+			continue;
+		}
+		$seen[ $t[0] ] = true;
+		$out[]         = $t;
+	}
+	return $out;
+}
+
+/**
+ * REST callback: stream a MySQL dump of the manifest's tables using the
+ * chunked-terminator wire format.
  *
  * @param  WP_REST_Request $request Request.
  */
-function rest_reprint_db( WP_REST_Request $request ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+function rest_sync_db( WP_REST_Request $request ): void {
 	maybe_load_reprint();
+	Sync_Stream\setup();
 
 	if ( ! class_exists( 'WordPress\\DataLiberation\\MySQLDumpProducer' ) ) {
 		http_response_code( 503 );
-		stream_ndjson_setup();
-		stream_ndjson_emit( array( 'type' => 'err', 'message' => 'Reprint classes not available.' ) );
+		Sync_Stream\emit_marker( Sync_Stream\MARKER_ERR, 'Reprint classes not available.' );
+		Sync_Stream\emit_marker( Sync_Stream\MARKER_DONE );
+		exit;
+	}
+
+	$manifest = Manifest\from_request( $request );
+	if ( empty( $manifest['tables'] ) ) {
+		Sync_Stream\emit_marker( Sync_Stream\MARKER_DONE );
 		exit;
 	}
 
 	try {
-		// build_pdo_dsn() is provided by vendor/wp-php-toolkit/reprint-exporter/src/utils.php
-		// via Composer's `files` autoload entry; unavailable to static analysers.
+		// build_pdo_dsn() is provided by reprint-exporter's Composer `files`
+		// autoload; static analysers can't see it.
 		if ( function_exists( 'build_pdo_dsn' ) ) {
 			$dsn = build_pdo_dsn( DB_HOST, DB_NAME );
 		} else {
 			$dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4';
 		}
-		// phpcs:ignore WordPress.DB.RestrictedClasses.mysql__PDO
+		// phpcs:disable WordPress.DB.RestrictedClasses.mysql__PDO -- $wpdb can't enumerate tables for the dumper; raw PDO is intentional here.
 		$pdo = new \PDO(
 			$dsn,
 			DB_USER,
 			DB_PASSWORD,
-			// phpcs:ignore WordPress.DB.RestrictedClasses.mysql__PDO
 			array( \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION )
 		);
+		// phpcs:enable WordPress.DB.RestrictedClasses.mysql__PDO
 	} catch ( \PDOException $e ) {
 		http_response_code( 500 );
-		stream_ndjson_setup();
-		stream_ndjson_emit( array( 'type' => 'err', 'message' => 'db_connect: ' . $e->getMessage() ) );
+		Sync_Stream\emit_marker( Sync_Stream\MARKER_ERR, 'db_connect: ' . $e->getMessage() );
+		Sync_Stream\emit_marker( Sync_Stream\MARKER_DONE );
 		exit;
 	}
 
-	stream_ndjson_setup();
-
-	$producer = new MySQLDumpProducer( $pdo );
+	$producer = new MySQLDumpProducer(
+		$pdo,
+		array( 'tables_to_process' => $manifest['tables'] )
+	);
+	$encoder  = new Sync_Stream\B64_Streamer();
 	$emitted  = 0;
+	$started  = false;
 
 	try {
 		while ( $producer->next_sql_fragment() ) {
@@ -407,26 +416,37 @@ function rest_reprint_db( WP_REST_Request $request ): void { // phpcs:ignore Gen
 			if ( null === $fragment ) {
 				continue;
 			}
-			stream_ndjson_emit(
-				array(
-					'type' => 'sql',
-					'b64'  => base64_encode( $fragment . "\n" ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
-				)
-			);
+			if ( ! $started ) {
+				Sync_Stream\emit_marker( Sync_Stream\MARKER_SQL );
+				$started = true;
+			}
+			// Newline keeps the splitter inside Playground happy: each
+			// fragment is a complete statement and trails a newline.
+			$encoder->feed( $fragment . "\n" );
 
-			if ( ( ++$emitted % 64 ) === 0 ) {
+			++$emitted;
+			if ( 0 === ( $emitted % 64 ) ) {
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- set_time_limit may be disabled in php.ini; the silence is the intended fallback.
 				@set_time_limit( 0 );
 				if ( connection_aborted() ) {
 					exit;
 				}
 			}
 		}
+		if ( $started ) {
+			$encoder->finalize();
+			Sync_Stream\emit_marker( Sync_Stream\MARKER_END );
+		}
 	} catch ( \Throwable $e ) {
-		stream_ndjson_emit( array( 'type' => 'err', 'message' => $e->getMessage() ) );
+		if ( ! headers_sent() ) {
+			http_response_code( 500 );
+		}
+		Sync_Stream\emit_marker( Sync_Stream\MARKER_ERR, $e->getMessage() );
+		Sync_Stream\emit_marker( Sync_Stream\MARKER_DONE );
 		exit;
 	}
 
-	stream_ndjson_emit( array( 'type' => 'end' ) );
+	Sync_Stream\emit_marker( Sync_Stream\MARKER_DONE );
 	exit;
 }
 

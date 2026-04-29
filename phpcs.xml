@@ -11,6 +11,14 @@
 	-->
 
 	<file>./live-sandbox-editor</file>
+	<!--
+	`./src` is intentionally NOT listed here. CI invokes phpcs with an
+	explicit `src/` path (see `composer lint:src` for the same command
+	locally) so the bundled-into-Playground PHP file gets linted in
+	isolation, without mixing in pre-existing plugin failures. Leaving
+	`./src` off this default file list keeps a bare `vendor/bin/phpcs`
+	scoped to plugin code; run `composer lint:src` for the sandbox lib.
+	-->
 	<exclude-pattern>./plugin-repo/*</exclude-pattern>
 	<exclude-pattern>./wordpress/*</exclude-pattern>
 	<exclude-pattern>\.m?js$</exclude-pattern>
@@ -121,6 +129,22 @@
 				<element value="live_sandbox_editor"/>
 			</property>
 		</properties>
+		<!--
+		`src/post-import-fixups.php` is a self-contained library bundled
+		into the JS entry as a `?raw` string and written to /tmp inside
+		Playground at runtime. It never executes in a host WordPress
+		alongside arbitrary plugins, so the prefix-collision rationale
+		doesn't apply; the file uses a short `lse_` prefix for readability.
+		Scoped to the one file deliberately — any future src/*.php must
+		opt in here explicitly so prefix enforcement isn't lost silently.
+		-->
+		<exclude-pattern>./src/post-import-fixups\.php$</exclude-pattern>
+		<!--
+		`src/uploads-passthrough.mu.php` is the same shape: a Playground
+		mu-plugin written into the sandbox at install time, never loaded
+		by host WordPress. Same `lse_` prefix convention.
+		-->
+		<exclude-pattern>./src/uploads-passthrough\.mu\.php$</exclude-pattern>
 	</rule>
 
 	<rule ref="WordPress.Files.FileName">

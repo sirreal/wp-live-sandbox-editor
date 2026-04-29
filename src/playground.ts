@@ -1,10 +1,27 @@
 import type { PlaygroundClient } from '@wp-playground/client';
-import { BatchedDiskFlusher, readNdjson } from './streaming.js';
+import postImportFixupsPhp from './post-import-fixups.php?raw';
+import { BatchedDiskFlusher, readSyncStream } from './streaming.js';
 import { getAppData } from './types.js';
+import uploadsPassthroughMuPhp from './uploads-passthrough.mu.php?raw';
+
+const FIXUPS_PATH = '/tmp/lse-fixups.php';
 
 export interface DebugSettings {
 	scriptDebug: boolean;
 	wpDebug: boolean;
+}
+
+export interface SyncManifest {
+	plugins: string[];
+	themes: string[];
+	tables: string[];
+	uploads: boolean;
+}
+
+interface ManifestResponse {
+	manifest: SyncManifest;
+	siteUrl: string;
+	uploadsUrl: string;
 }
 
 async function getErrorResponseText(res: Response): Promise<string | null> {
@@ -38,19 +55,49 @@ export async function initPlayground(
 		await logSqliteIntegrationVersion(client);
 	}
 
-	onStatus('Importing site files…');
-	const filesOk = await importReprintFiles(client);
+	onStatus('Resolving sync manifest…');
+	const manifestResp = await fetchManifest();
+	// Future PR: surface a UI for the user to override `manifest` before
+	// kicking off the sync. For now, defaults: active plugins, active
+	// theme + parent, structural WP tables, no uploads.
+	const manifest = manifestResp.manifest;
 
-	if (filesOk) {
-		onStatus('Importing database…');
-		await importReprintDb(client, debugMode);
-
-		onStatus('Finalizing sandbox…');
-		await applyPostImportFixups(client);
+	if (debugMode) {
+		console.log('[live-sandbox-editor] manifest:', manifestResp);
 	}
+
+	const hasFiles =
+		manifest.plugins.length > 0 ||
+		manifest.themes.length > 0 ||
+		manifest.uploads;
+	const hasDb = manifest.tables.length > 0;
+
+	if (hasFiles) {
+		onStatus('Importing site files…');
+		await importFiles(client, manifest, debugMode);
+	}
+
+	if (hasDb) {
+		onStatus('Importing database…');
+		await importDb(client, manifest, debugMode);
+	}
+
+	onStatus('Finalizing sandbox…');
+	await applyPostImportFixups(client, hasDb ? manifestResp : null, onStatus);
 
 	await client.goTo('/wp-admin/');
 	return client;
+}
+
+async function fetchManifest(): Promise<ManifestResponse> {
+	const { restUrl, nonce } = getAppData();
+	const res = await fetch(`${restUrl}/sync-manifest`, {
+		headers: { 'X-WP-Nonce': nonce, Accept: 'application/json' },
+	});
+	if (!res.ok) {
+		throw new Error(`sync-manifest failed: ${res.status}`);
+	}
+	return (await res.json()) as ManifestResponse;
 }
 
 /**
@@ -85,9 +132,7 @@ async function logSqliteIntegrationVersion(
 			if ($found) {
 				$dir = dirname($found);
 				foreach (array(
-					// v3.0.0+ layout (monorepo restructure, PR #334).
 					$dir . '/wp-includes/database/sqlite/class-wp-sqlite-pdo-user-defined-functions.php',
-					// pre-v3 layout.
 					$dir . '/wp-includes/sqlite/class-wp-sqlite-pdo-user-defined-functions.php',
 					$dir . '/wp-includes/sqlite-ast/class-wp-sqlite-pdo-user-defined-functions.php',
 				) as $u) {
@@ -112,84 +157,82 @@ async function logSqliteIntegrationVersion(
 	);
 }
 
-/**
- * Stream wp-content files from the REST proxy directly into Playground
- * disk. Files are appended chunk-by-chunk via FILE_APPEND inside Playground;
- * the JS heap never holds a full file or a buffered response body.
- *
- * Returns true on success, false if the server reports an error.
- */
-async function importReprintFiles(client: PlaygroundClient): Promise<boolean> {
+async function postManifestStream(
+	endpoint: string,
+	manifest: SyncManifest,
+): Promise<Response> {
 	const { restUrl, nonce } = getAppData();
-	const docroot = await client.documentRoot;
-
-	const res = await fetch(`${restUrl}/reprint-files`, {
-		headers: { 'X-WP-Nonce': nonce, Accept: 'application/x-ndjson' },
+	return fetch(`${restUrl}/${endpoint}`, {
+		method: 'POST',
+		headers: {
+			'X-WP-Nonce': nonce,
+			'Content-Type': 'application/json',
+			Accept: 'application/octet-stream',
+		},
+		body: JSON.stringify(manifest),
 	});
-
-	if (!res.ok) {
-		const errorText = await getErrorResponseText(res);
-		console.error(
-			'[live-sandbox-editor] Reprint file import failed:',
-			res.status,
-			errorText ?? '',
-		);
-		return false;
-	}
-
-	const flusher = new BatchedDiskFlusher(client);
-
-	try {
-		await readNdjson(res, async (rec) => {
-			if (rec.type !== 'file') return;
-			const fullPath = docroot + rec.path;
-			await flusher.addFileChunk(fullPath, rec.b64, rec.seq === 0);
-		});
-		await flusher.flush();
-	} catch (err) {
-		console.error('[live-sandbox-editor] File stream failed:', err);
-		return false;
-	}
-
-	return true;
 }
 
-/**
- * Stream the SQL dump from the REST proxy straight to a file inside
- * Playground, then execute it via an in-Playground splitter that reads
- * from disk. The full SQL never lives in JS or PHP memory — both sides
- * are bounded by the flusher's batch size.
- */
-async function importReprintDb(
+async function importFiles(
 	client: PlaygroundClient,
+	manifest: SyncManifest,
 	debugMode: boolean,
 ): Promise<void> {
-	const { restUrl, nonce } = getAppData();
-	const res = await fetch(`${restUrl}/reprint-db`, {
-		headers: { 'X-WP-Nonce': nonce, Accept: 'application/x-ndjson' },
-	});
-
+	const docroot = await client.documentRoot;
+	const res = await postManifestStream('sync-files', manifest);
 	if (!res.ok) {
 		const errorText = await getErrorResponseText(res);
 		console.error(
-			'[live-sandbox-editor] Reprint DB import failed:',
+			'[live-sandbox-editor] sync-files failed:',
 			res.status,
 			errorText ?? '',
 		);
 		return;
 	}
 
-	const flusher = new BatchedDiskFlusher(client);
+	const flusher = new BatchedDiskFlusher(client, {
+		// Logical paths begin with `/wp-content/...` — the Playground docroot
+		// lives at /wordpress (or similar), so prefix accordingly.
+		logicalToFullPath: (logical: string) => `${docroot}${logical}`,
+		debug: debugMode,
+	});
+
+	try {
+		await readSyncStream(res, flusher);
+		await flusher.finalize();
+	} catch (err) {
+		console.error('[live-sandbox-editor] file stream failed:', err);
+	}
+}
+
+async function importDb(
+	client: PlaygroundClient,
+	manifest: SyncManifest,
+	debugMode: boolean,
+): Promise<void> {
+	const res = await postManifestStream('sync-db', manifest);
+	if (!res.ok) {
+		const errorText = await getErrorResponseText(res);
+		console.error(
+			'[live-sandbox-editor] sync-db failed:',
+			res.status,
+			errorText ?? '',
+		);
+		return;
+	}
+
+	const flusher = new BatchedDiskFlusher(client, {
+		// SQL stream doesn't need a path mapper, but the constructor requires one.
+		logicalToFullPath: (p) => p,
+		debug: debugMode,
+	});
 	await flusher.resetSqlFile();
 
 	try {
-		await readNdjson(res, async (rec) => {
-			if (rec.type !== 'sql') return;
-			await flusher.addSqlChunk(rec.b64);
-		});
-		await flusher.flush();
+		await readSyncStream(res, flusher);
+		await flusher.finalize();
 	} catch (err) {
-		console.error('[live-sandbox-editor] DB stream failed:', err);
+		console.error('[live-sandbox-editor] db stream failed:', err);
 		return;
 	}
 
@@ -227,11 +270,16 @@ async function runSqlFromDisk(
 			$wpdb->suppress_errors();
 			$wpdb->hide_errors();
 
-			$sql = file_get_contents('${sqlPath}');
-			$len = strlen($sql);
-			$i = 0;
-			$start = 0;
-			$in_str = false;
+			$fp = fopen('${sqlPath}', 'rb');
+			if (!$fp) {
+				echo json_encode(array(
+					'ok' => 0,
+					'fail' => 1,
+					'sampleErrors' => array(array('error' => 'fopen failed', 'sql' => '${sqlPath}')),
+				));
+				exit;
+			}
+
 			$ok = 0;
 			$fail = 0;
 			$errors = array();
@@ -255,39 +303,64 @@ async function runSqlFromDisk(
 				}
 			};
 
-			while ($i < $len) {
-				$c = $sql[$i];
-				if (!$in_str) {
-					if ($c === '-' && $i + 1 < $len && $sql[$i + 1] === '-') {
-						$nl = strpos($sql, "\\n", $i);
-						$i = ($nl === false) ? $len : $nl + 1;
-						continue;
-					}
-					if ($c === '/' && $i + 1 < $len && $sql[$i + 1] === '*') {
-						$end = strpos($sql, '*/', $i + 2);
-						$i = ($end === false) ? $len : $end + 2;
-						continue;
-					}
-					if ($c === "'") {
-						$in_str = true;
-					} elseif ($c === ';') {
-						$run_stmt(substr($sql, $start, $i - $start + 1));
-						$start = $i + 1;
-					}
-				} else {
-					if ($c === "'") {
-						if ($i + 1 < $len && $sql[$i + 1] === "'") {
-							$i++;
-						} else {
-							$in_str = false;
-						}
+			// Streaming statement splitter. Memory: chunk_size + one statement.
+			// State persists across reads so strings/comments/statements straddling
+			// a chunk boundary are handled identically to the in-memory version.
+			$stmt  = '';
+			$state = 'normal'; // normal | string | line_comment | block_comment
+			$tail  = '';       // 1-byte carry so $next is always defined inside the loop
+
+			$read_failed = false;
+			while (!feof($fp)) {
+				$chunk = fread($fp, 262144);
+				if ($chunk === false) { $read_failed = true; break; }
+				if ($chunk === '') continue;
+
+				$buf  = $tail . $chunk;
+				$blen = strlen($buf);
+				$eof  = feof($fp);
+				$end  = $eof ? $blen : $blen - 1;
+				$tail = $eof ? ''    : $buf[$blen - 1];
+
+				for ($i = 0; $i < $end; $i++) {
+					$c    = $buf[$i];
+					$next = ($i + 1 < $blen) ? $buf[$i + 1] : '';
+
+					if ($state === 'normal') {
+						if ($c === '-' && $next === '-') { $state = 'line_comment';  $i++; continue; }
+						if ($c === '/' && $next === '*') { $state = 'block_comment'; $i++; continue; }
+						if ($c === "'")                  { $state = 'string'; $stmt .= $c; continue; }
+						if ($c === ';')                  { $stmt .= $c; $run_stmt($stmt); $stmt = ''; continue; }
+						$stmt .= $c;
+					} elseif ($state === 'string') {
+						if ($c === "'" && $next === "'") { $stmt .= "''"; $i++; continue; }
+						if ($c === "'")                  { $state = 'normal'; $stmt .= $c; continue; }
+						$stmt .= $c;
+					} elseif ($state === 'line_comment') {
+						if ($c === "\\n") $state = 'normal';
+					} else { // block_comment
+						if ($c === '*' && $next === '/') { $state = 'normal'; $i++; }
 					}
 				}
-				$i++;
+
+				// 2-char-token cases above peek into $buf[$blen-1] (the deferred
+				// byte) and advance $i past it. When that happens the loop exits
+				// with $i > $end; clear $tail so the deferred byte isn't replayed.
+				if ($i > $end) $tail = '';
 			}
-			if ($start < $len) {
-				$run_stmt(substr($sql, $start));
+
+			if ($read_failed) {
+				echo json_encode(array(
+					'ok' => $ok,
+					'fail' => $fail + 1,
+					'sampleErrors' => array_merge($errors, array(array('error' => 'fread failed', 'sql' => '${sqlPath}'))),
+				));
+				fclose($fp);
+				exit;
 			}
+
+			if (trim($stmt) !== '') $run_stmt($stmt);
+			fclose($fp);
 
 			echo json_encode(array(
 				'ok' => $ok,
@@ -323,28 +396,110 @@ async function runSqlFromDisk(
 	}
 }
 
-async function applyPostImportFixups(client: PlaygroundClient): Promise<void> {
-	const docroot = await client.documentRoot;
-	const playgroundUrl = await client.absoluteUrl;
+function phpStringLiteral(s: string): string {
+	// PHP single-quoted: escape backslashes and single quotes only.
+	return `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+}
 
+interface RewriteCtx {
+	hostUrl: string;
+	uploadsUrl: string;
+	playgroundUrl: string;
+}
+
+async function applyPostImportFixups(
+	client: PlaygroundClient,
+	dbContext: ManifestResponse | null,
+	onStatus: (status: string) => void,
+): Promise<void> {
+	const docroot = await client.documentRoot;
+	await client.writeFile(FIXUPS_PATH, postImportFixupsPhp);
+
+	// URL rewrite is conditional on a DB sync — without one, Playground's
+	// default options shouldn't be smashed with the host's URLs.
+	if (dbContext) {
+		const ctx: RewriteCtx = {
+			hostUrl: dbContext.siteUrl.replace(/\/$/, ''),
+			uploadsUrl: dbContext.uploadsUrl.replace(/\/$/, ''),
+			playgroundUrl: (await client.absoluteUrl).replace(/\/$/, ''),
+		};
+		await rewriteUrls(client, docroot, ctx, onStatus);
+		if (!dbContext.manifest.uploads) {
+			await installUploadsPassthrough(client, docroot, ctx.uploadsUrl);
+		}
+	}
+
+	// Self-deactivate runs unconditionally — file sync excludes the editor
+	// from copy, but `active_plugins` in the imported DB may still carry it.
 	await client.run({
 		code: `<?php
-			require('${docroot}/wp-load.php');
-			update_option('siteurl', '${playgroundUrl}');
-			update_option('home', '${playgroundUrl}');
+			require '${docroot}/wp-load.php';
+			require_once '${FIXUPS_PATH}';
+			lse_deactivate_self();
+		`,
+	});
+}
 
-			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+/**
+ * Install a mu-plugin that filters runtime upload-URL helpers
+ * (`wp_get_attachment_url`, `wp_calculate_image_srcset`) back at the
+ * host. Without this, every runtime-generated upload URL resolves to
+ * Playground's origin, where the file doesn't exist because uploads
+ * weren't synced.
+ *
+ * The mu-plugin maintains a skip list (`lse_uploads_passthrough_skip_urls`
+ * option, also exposed as a filter of the same name) so URLs we _don't_
+ * want redirected — chiefly media uploaded inside the sandbox post-sync —
+ * stay on playground origin. Newly added attachments append themselves
+ * to the skip list via the postmeta hooks in the mu-plugin.
+ */
+async function installUploadsPassthrough(
+	client: PlaygroundClient,
+	docroot: string,
+	hostUploadsUrl: string,
+): Promise<void> {
+	const muDir = `${docroot}/wp-content/mu-plugins`;
+	// Swap the whole PHP literal so `phpStringLiteral` handles escaping;
+	// the mu-plugin guards against missed substitutions by sniffing for
+	// the `__LSE_` prefix on its constant value before registering hooks.
+	const muPlugin = uploadsPassthroughMuPhp.replace(
+		"'__LSE_HOST_UPLOADS_URL__'",
+		phpStringLiteral(hostUploadsUrl),
+	);
+	// One round-trip: mkdir + write together. Embedding the whole
+	// mu-plugin via `phpStringLiteral` means PHP un-escapes the literal
+	// back to the original source byte-for-byte before `file_put_contents`
+	// writes it.
+	await client.run({
+		code: `<?php
+			$dir = ${phpStringLiteral(muDir)};
+			@mkdir( $dir, 0755, true );
+			file_put_contents(
+				$dir . '/lse-uploads-passthrough.php',
+				${phpStringLiteral(muPlugin)}
+			);
+		`,
+	});
+}
 
-			// Match by main-file postfix — the WP plugin dir name isn't stable.
-			$active   = (array) get_option('active_plugins', array());
-			$sitewide = is_multisite() ? array_keys((array) get_site_option('active_sitewide_plugins', array())) : array();
-			$entries  = array_filter(array_unique(array_merge($active, $sitewide)), static function ($entry) {
-				return str_ends_with($entry, '/live-sandbox-editor.php');
-			});
-
-			if ($entries) {
-				deactivate_plugins(array_values($entries), true);
-			}
+async function rewriteUrls(
+	client: PlaygroundClient,
+	docroot: string,
+	ctx: RewriteCtx,
+	onStatus: (status: string) => void,
+): Promise<void> {
+	onStatus('Rewriting site URLs…');
+	await client.run({
+		code: `<?php
+			require '${docroot}/wp-load.php';
+			require_once '${FIXUPS_PATH}';
+			update_option('siteurl', ${phpStringLiteral(ctx.playgroundUrl)});
+			update_option('home', ${phpStringLiteral(ctx.playgroundUrl)});
+			lse_rewrite_all_urls(
+				${phpStringLiteral(ctx.hostUrl)},
+				${phpStringLiteral(ctx.playgroundUrl)},
+				${phpStringLiteral(ctx.uploadsUrl)}
+			);
 		`,
 	});
 }

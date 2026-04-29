@@ -8,7 +8,8 @@
 		"dev": "vite",
 		"build": "vite build",
 		"watch": "vite build --watch",
-		"zip": "npm run build && zip -r live-sandbox-editor.zip live-sandbox-editor"
+		"zip": "npm run build && zip -r live-sandbox-editor.zip live-sandbox-editor",
+		"ci-check": "tsgo --noEmit && biome check . && npm run build && composer validate --strict && composer validate --strict --working-dir=live-sandbox-editor && find live-sandbox-editor src -path 'live-sandbox-editor/vendor' -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l && composer lint:src"
 	},
 	"author": "sirreal",
 	"license": "GPL-2.0",
