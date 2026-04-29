@@ -52,7 +52,10 @@ jobs:
 
       - name: Check PHP syntax
         run: |
-          find live-sandbox-editor \
+          find live-sandbox-editor src \
             -path 'live-sandbox-editor/vendor' -prune -o \
             -name '*.php' -print0 \
             | xargs -0 -n1 php -l
+
+      - name: Check PHP coding standards (src/)
+        run: composer lint:src
