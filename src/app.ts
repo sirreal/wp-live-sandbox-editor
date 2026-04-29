@@ -7,8 +7,8 @@ import {
 } from './editor.js';
 import { initFileExplorer } from './file-explorer.js';
 import { readFile, writeFile } from './filesystem.js';
-import { setClient } from './playground-client-ref.js';
 import { initPlayground } from './playground.js';
+import { setClient } from './playground-client-ref.js';
 import { sandboxState } from './store.js';
 import { getAppData, type OpenFile } from './types.js';
 
