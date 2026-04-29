@@ -93,9 +93,12 @@ export async function initApp(root: HTMLElement): Promise<void> {
 		await writeFile(client, path, content);
 		const currentUrl = await client.getCurrentURL();
 		await client.goTo(currentUrl);
-		sandbox.state.statusText = `Saved: ${path.split('/').pop()}`;
+		const savedMessage = `Saved: ${path.split('/').pop()}`;
+		sandbox.state.statusText = savedMessage;
 		setTimeout(() => {
-			sandbox.state.statusText = 'Ready';
+			if (sandbox.state.statusText === savedMessage) {
+				sandbox.state.statusText = 'Ready';
+			}
 		}, 2000);
 	});
 }
