@@ -21,7 +21,6 @@ export async function initApp(root: HTMLElement): Promise<void> {
 	initEditor(monacoContainer);
 	initDragHandle(dragHandle, editorPane, previewPane);
 
-	// --- Tab state ---
 	const openTabs: OpenFile[] = [];
 	let activeTab: string | null = null;
 
@@ -73,7 +72,6 @@ export async function initApp(root: HTMLElement): Promise<void> {
 	const docroot = await client.documentRoot;
 	const wpContentPath = `${docroot}/wp-content`;
 
-	// --- File explorer ---
 	initFileExplorer(fileTreeBody, client, wpContentPath, async (filePath) => {
 		const existingTab = openTabs.find((t) => t.path === filePath);
 		const label = filePath.split('/').pop() ?? filePath;
@@ -88,7 +86,6 @@ export async function initApp(root: HTMLElement): Promise<void> {
 		sandbox.state.statusText = filePath;
 	});
 
-	// --- Save handler ---
 	addSaveCommand(async (path, content) => {
 		await writeFile(client, path, content);
 		const currentUrl = await client.getCurrentURL();
