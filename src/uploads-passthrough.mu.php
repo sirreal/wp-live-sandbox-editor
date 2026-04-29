@@ -10,9 +10,12 @@
  * URL is appended to a skip list at attachment-meta time.
  *
  * Skip list lives in the `lse_uploads_passthrough_skip_urls` option
- * (array of URL prefixes). Hook the `lse_uploads_passthrough_skip_urls`
- * filter to extend it at runtime — e.g. once partial media sync lands,
- * the host plugin can append the synced subset.
+ * as full upload URLs; the matcher accepts an exact match or a
+ * WP-generated sized variant (`-WxH` injected before the extension)
+ * so all variants share one entry. Hook the
+ * `lse_uploads_passthrough_skip_urls` filter to extend it at runtime —
+ * e.g. once partial media sync lands, the host plugin can append the
+ * synced subset.
  *
  * `LSE_PASSTHROUGH_HOST_UPLOADS_URL` is templated in by the editor at
  * install time (placeholder is rejected by the guard below if the
@@ -75,8 +78,17 @@ function lse_passthrough_skip_list( bool $reset = false ): array {
  * @return bool
  */
 function lse_passthrough_is_skipped( string $url ): bool {
-	foreach ( lse_passthrough_skip_list() as $prefix ) {
-		if ( str_starts_with( $url, $prefix ) ) {
+	foreach ( lse_passthrough_skip_list() as $entry ) {
+		if ( $url === $entry ) {
+			return true;
+		}
+		$dot = strrpos( $entry, '.' );
+		if ( false === $dot ) {
+			continue;
+		}
+		$base = substr( $entry, 0, $dot );
+		$ext  = substr( $entry, $dot );
+		if ( str_starts_with( $url, $base . '-' ) && str_ends_with( $url, $ext ) ) {
 			return true;
 		}
 	}
