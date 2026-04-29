@@ -114,7 +114,7 @@ function normalize( $raw ): array {
 	$plugins = array();
 	if ( isset( $raw['plugins'] ) && is_array( $raw['plugins'] ) ) {
 		foreach ( $raw['plugins'] as $entry ) {
-			if ( is_string( $entry ) && '' !== $entry && ! is_self_plugin_entry( $entry ) ) {
+			if ( is_string( $entry ) && '' !== $entry && is_safe_plugin_entry( $entry ) && ! is_self_plugin_entry( $entry ) ) {
 				$plugins[] = $entry;
 			}
 		}
@@ -123,7 +123,7 @@ function normalize( $raw ): array {
 	$themes = array();
 	if ( isset( $raw['themes'] ) && is_array( $raw['themes'] ) ) {
 		foreach ( $raw['themes'] as $slug ) {
-			if ( is_string( $slug ) && '' !== $slug ) {
+			if ( is_string( $slug ) && '' !== $slug && is_safe_theme_slug( $slug ) ) {
 				$themes[] = $slug;
 			}
 		}
@@ -171,22 +171,47 @@ function normalize( $raw ): array {
  * @return array<int,array{0:string,1:string}>
  */
 function plugin_paths( string $entry ): array {
-	$plugin_dir   = rtrim( WP_PLUGIN_DIR, '/' );
+	$plugin_dir_real = realpath( WP_PLUGIN_DIR );
+	if ( false === $plugin_dir_real ) {
+		return array();
+	}
+
+	$plugin_dir   = rtrim( $plugin_dir_real, '/\\' );
 	$logical_root = '/wp-content/plugins';
 
 	if ( str_contains( $entry, '/' ) ) {
-		$slug         = explode( '/', $entry, 2 )[0];
-		$host_root    = $plugin_dir . '/' . $slug;
+		$slug              = explode( '/', $entry, 2 )[0];
+		$host_root         = $plugin_dir . '/' . $slug;
+		$host_root_real    = realpath( $host_root );
+		$plugin_dir_prefix = $plugin_dir . '/';
+
+		if (
+			false === $host_root_real ||
+			! is_dir( $host_root_real ) ||
+			$host_root_real !== $plugin_dir &&
+			0 !== strpos( $host_root_real, $plugin_dir_prefix )
+		) {
+			return array();
+		}
+
 		$logical_base = $logical_root . '/' . $slug;
-		return collect_files( $host_root, $logical_base );
+		return collect_files( $host_root_real, $logical_base );
 	}
 
 	// Single-file plugin lives directly in the plugins dir.
-	$host_path = $plugin_dir . '/' . $entry;
-	if ( ! is_file( $host_path ) ) {
+	$host_path         = $plugin_dir . '/' . $entry;
+	$host_path_real    = realpath( $host_path );
+	$plugin_dir_prefix = $plugin_dir . '/';
+
+	if (
+		false === $host_path_real ||
+		! is_file( $host_path_real ) ||
+		0 !== strpos( $host_path_real, $plugin_dir_prefix )
+	) {
 		return array();
 	}
-	return array( array( $host_path, $logical_root . '/' . $entry ) );
+
+	return array( array( $host_path_real, $logical_root . '/' . $entry ) );
 }
 
 /**
@@ -291,6 +316,41 @@ function self_plugin_dir(): ?string {
 function is_self_plugin_entry( string $entry ): bool {
 	return str_ends_with( $entry, '/live-sandbox-editor.php' )
 		|| 'live-sandbox-editor.php' === $entry;
+}
+
+/**
+ * Allowlist a plugin entry against the two shapes WordPress uses:
+ * `slug/main.php` or `single.php`. Rejects path traversal (`..`),
+ * empty/dot segments, and anything outside the safe charset.
+ *
+ * @param string $entry Plugin entry from a manifest.
+ * @return bool
+ */
+function is_safe_plugin_entry( string $entry ): bool {
+	if ( ! preg_match( '#^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)?\.php$#', $entry ) ) {
+		return false;
+	}
+	foreach ( explode( '/', $entry ) as $segment ) {
+		if ( '' === $segment || '.' === $segment || '..' === $segment ) {
+			return false;
+		}
+	}
+	return true;
+}
+
+/**
+ * Allowlist a theme slug. Themes are a single path segment under the
+ * theme root, so the same character class as plugins applies but
+ * without a `/`.
+ *
+ * @param string $slug Theme slug from a manifest.
+ * @return bool
+ */
+function is_safe_theme_slug( string $slug ): bool {
+	if ( ! preg_match( '/^[A-Za-z0-9._-]+$/', $slug ) ) {
+		return false;
+	}
+	return '.' !== $slug && '..' !== $slug;
 }
 
 /**

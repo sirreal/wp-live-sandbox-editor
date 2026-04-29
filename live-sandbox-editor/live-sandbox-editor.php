@@ -227,6 +227,7 @@ function rest_sync_files( WP_REST_Request $request ): void {
 	Sync_Stream\setup();
 
 	if ( ! class_exists( 'FileTreeProducer' ) ) {
+		http_response_code( 500 );
 		Sync_Stream\emit_marker( Sync_Stream\MARKER_ERR, 'Reprint classes not available.' );
 		Sync_Stream\emit_marker( Sync_Stream\MARKER_DONE );
 		exit;
@@ -306,6 +307,9 @@ function rest_sync_files( WP_REST_Request $request ): void {
 			Sync_Stream\emit_marker( Sync_Stream\MARKER_END );
 		}
 	} catch ( \Throwable $e ) {
+		if ( ! headers_sent() ) {
+			http_response_code( 500 );
+		}
 		Sync_Stream\emit_marker( Sync_Stream\MARKER_ERR, $e->getMessage() );
 		Sync_Stream\emit_marker( Sync_Stream\MARKER_DONE );
 		exit;
@@ -363,6 +367,7 @@ function rest_sync_db( WP_REST_Request $request ): void {
 	Sync_Stream\setup();
 
 	if ( ! class_exists( 'WordPress\\DataLiberation\\MySQLDumpProducer' ) ) {
+		http_response_code( 503 );
 		Sync_Stream\emit_marker( Sync_Stream\MARKER_ERR, 'Reprint classes not available.' );
 		Sync_Stream\emit_marker( Sync_Stream\MARKER_DONE );
 		exit;
@@ -391,6 +396,7 @@ function rest_sync_db( WP_REST_Request $request ): void {
 		);
 		// phpcs:enable WordPress.DB.RestrictedClasses.mysql__PDO
 	} catch ( \PDOException $e ) {
+		http_response_code( 500 );
 		Sync_Stream\emit_marker( Sync_Stream\MARKER_ERR, 'db_connect: ' . $e->getMessage() );
 		Sync_Stream\emit_marker( Sync_Stream\MARKER_DONE );
 		exit;
@@ -432,6 +438,9 @@ function rest_sync_db( WP_REST_Request $request ): void {
 			Sync_Stream\emit_marker( Sync_Stream\MARKER_END );
 		}
 	} catch ( \Throwable $e ) {
+		if ( ! headers_sent() ) {
+			http_response_code( 500 );
+		}
 		Sync_Stream\emit_marker( Sync_Stream\MARKER_ERR, $e->getMessage() );
 		Sync_Stream\emit_marker( Sync_Stream\MARKER_DONE );
 		exit;
