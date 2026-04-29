@@ -9,6 +9,6 @@
 	"plugins": ["./live-sandbox-editor"],
 	"testsEnvironment": false,
 	"lifecycleScripts": {
-		"afterStart": "bash scripts/install-php-extensions.sh"
+		"afterStart": "npx @wordpress/env run wordpress bash -c \"php -m | grep -q pdo_mysql || (sudo docker-php-ext-install pdo_mysql && sudo service apache2 reload)\""
 	}
 }
