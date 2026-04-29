@@ -15,7 +15,7 @@ export default defineConfig({
 		emptyOutDir: true,
 		modulePreload: false,
 		sourcemap: true,
-		rollupOptions: {
+		rolldownOptions: {
 			input: 'src/main.ts',
 			output: {
 				entryFileNames: '[name].js',
@@ -27,10 +27,17 @@ export default defineConfig({
 				// `?ver=…` — two URL identities for the same module re-runs
 				// the entry's side effects (second editor + Playground iframe).
 				// Pull monaco-editor's static graph into its own chunk; lazy
-				// language modes stay as their own dynamic chunks and share
-				// `./monaco-[hash].js` with main.js.
-				manualChunks: {
-					monaco: ['monaco-editor'],
+				// language modes (cssMode, tsMode, …) stay as their own
+				// dynamic chunks and share `./monaco-[hash].js` with main.js.
+				codeSplitting: {
+					groups: [
+						{
+							name: 'monaco',
+							test: (id) =>
+								id.includes('node_modules/monaco-editor/') &&
+								!/\/(?:cssMode|tsMode|htmlMode|jsonMode)\.js$/.test(id),
+						},
+					],
 				},
 			},
 		},

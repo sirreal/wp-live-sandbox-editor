@@ -21,7 +21,7 @@
 		"@biomejs/biome": "^1.9.4",
 		"@tsconfig/strictest": "^2.0.5",
 		"typescript": "npm:@typescript/native-preview@beta",
-		"vite": "^5.x"
+		"vite": "^8.x"
 	},
 	"volta": {
 		"node": "22.22.2",
