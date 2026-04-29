@@ -76,6 +76,8 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 			sandbox.state.isReady = true;
 			sandbox.state.url = currentUrl;
 			yield client.onNavigation((path: string) => {
+				const input = document.querySelector('.lse-url-input');
+				if (document.activeElement === input) return;
 				sandbox.state.url = path;
 			});
 
