@@ -33,7 +33,8 @@ export const sandbox = store('live-sandbox-editor/sandbox', {
 		},
 		*refresh(): Generator<Promise<unknown>, void> {
 			if (!client) return;
-			yield client.goTo(sandbox.state.url);
+			const currentUrl = (yield client.getCurrentURL()) as string;
+			yield client.goTo(currentUrl);
 		},
 		*boot(
 			iframe: HTMLIFrameElement,
