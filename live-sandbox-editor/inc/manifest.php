@@ -102,7 +102,6 @@ function default_structural_tables(): array {
  * @return array{plugins:array<string>,themes:array<string>,tables:array<string>,uploads:bool}
  */
 function normalize( $raw ): array {
-	$base = defaults();
 	if ( ! is_array( $raw ) ) {
 		return array(
 			'plugins' => array(),
