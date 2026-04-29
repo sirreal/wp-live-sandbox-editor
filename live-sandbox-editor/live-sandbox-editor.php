@@ -72,7 +72,7 @@ function enqueue_assets( string $hook_suffix ): void {
 	wp_enqueue_script_module(
 		SLUG,
 		plugins_url( 'build/main.js', __FILE__ ),
-		array(),
+		array( '@wordpress/interactivity' ),
 		asset_version( 'build/main.js' )
 	);
 
@@ -99,6 +99,15 @@ function enqueue_assets( string $hook_suffix ): void {
 			);
 			return $app_data;
 		}
+	);
+
+	wp_interactivity_state(
+		SLUG . '/sandbox',
+		array(
+			'url'        => '',
+			'statusText' => 'Initializing…',
+			'isReady'    => false,
+		)
 	);
 
 	wp_enqueue_style(
@@ -142,7 +151,7 @@ function register_menu(): void {
 
 /** Render the admin page. */
 function render_page(): void {
-	echo '<div id="live-sandbox-editor-root"></div>';
+	require __DIR__ . '/templates/sandbox-view.php';
 }
 
 /** Show a notice when the vendored Reprint classes are unavailable. */

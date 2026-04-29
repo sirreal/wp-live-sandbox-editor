@@ -7,69 +7,21 @@ import {
 } from './editor.js';
 import { initFileExplorer } from './file-explorer.js';
 import { readFile, writeFile } from './filesystem.js';
+import { setClient } from './playground-client-ref.js';
 import { initPlayground } from './playground.js';
+import { sandboxState } from './store.js';
 import { getAppData, type OpenFile } from './types.js';
 
 export async function initApp(root: HTMLElement): Promise<void> {
-	// --- Build DOM ---
-	const main = el('div', 'lse-main');
-	const editorPane = el('div', 'lse-editor-pane');
-	const fileTree = el('div', 'lse-file-tree');
-	const fileTreeHeader = el('div', 'lse-file-tree-header');
-	fileTreeHeader.textContent = 'Files';
-	const fileTreeBody = el('div', 'lse-file-tree-body');
-	fileTree.appendChild(fileTreeHeader);
-	fileTree.appendChild(fileTreeBody);
+	const tabStrip = mustGet(root, 'lse-tabs');
+	const monacoContainer = mustGet(root, 'lse-monaco');
+	const fileTreeBody = mustGet(root, 'lse-file-tree-body');
+	const dragHandle = mustGet(root, 'lse-drag-handle');
+	const editorPane = mustQuery(root, '.lse-editor-pane');
+	const previewPane = mustQuery(root, '.lse-preview-pane');
+	const iframe = mustGet(root, 'lse-preview-iframe') as HTMLIFrameElement;
 
-	const monacoSection = el('div', 'lse-monaco-section');
-	const tabStrip = el('div', 'lse-tabs');
-	const monacoContainer = el('div', 'lse-monaco-container');
-	monacoSection.appendChild(tabStrip);
-	monacoSection.appendChild(monacoContainer);
-
-	editorPane.appendChild(fileTree);
-	editorPane.appendChild(monacoSection);
-
-	const dragHandle = el('div', 'lse-drag-handle');
-
-	const previewPane = el('div', 'lse-preview-pane');
-	const previewToolbar = el('div', 'lse-preview-toolbar');
-	const previewLabel = el('span');
-	previewLabel.textContent = 'Playground Preview';
-	const refreshBtn = el('button');
-	refreshBtn.textContent = '↺ Refresh';
-	previewToolbar.appendChild(previewLabel);
-	previewToolbar.appendChild(refreshBtn);
-	const iframe = document.createElement('iframe');
-	iframe.className = 'lse-preview-iframe';
-	iframe.setAttribute('allow', 'cross-origin-isolated');
-	previewPane.appendChild(previewToolbar);
-	previewPane.appendChild(iframe);
-
-	main.appendChild(editorPane);
-	main.appendChild(dragHandle);
-	main.appendChild(previewPane);
-
-	const statusBar = el('div', 'lse-status-bar');
-	const statusText = el('span', 'lse-status-indicator');
-	statusText.textContent = '● Initializing…';
-	statusBar.appendChild(statusText);
-
-	const loading = el('div', 'lse-loading');
-	const spinner = el('div', 'lse-spinner');
-	const loadingLabel = el('span');
-	loadingLabel.textContent = 'Booting Playground…';
-	loading.appendChild(spinner);
-	loading.appendChild(loadingLabel);
-
-	root.appendChild(main);
-	root.appendChild(statusBar);
-	root.appendChild(loading);
-
-	// --- Init Monaco ---
 	initEditor(monacoContainer);
-
-	// --- Drag handle ---
 	initDragHandle(dragHandle, editorPane, previewPane);
 
 	// --- Tab state ---
@@ -122,8 +74,7 @@ export async function initApp(root: HTMLElement): Promise<void> {
 	let playgroundClient: PlaygroundClient | null = null;
 
 	const onStatus = (status: string): void => {
-		loadingLabel.textContent = status;
-		statusText.textContent = `● ${status}`;
+		sandboxState.statusText = status;
 	};
 
 	const { scriptDebug, wpDebug } = getAppData();
@@ -134,15 +85,21 @@ export async function initApp(root: HTMLElement): Promise<void> {
 			wpDebug,
 		});
 	} catch (err) {
-		loadingLabel.textContent = 'Playground failed to initialize.';
+		sandboxState.statusText = 'Playground failed to initialize.';
 		console.error('[live-sandbox-editor] Playground init error:', err);
 		return;
 	}
 
-	loading.classList.add('hidden');
-	statusText.textContent = '● Ready';
-
 	const client = playgroundClient;
+	setClient(client);
+
+	sandboxState.statusText = 'Ready';
+	sandboxState.isReady = true;
+	sandboxState.url = await client.getCurrentURL();
+	await client.onNavigation((path: string) => {
+		sandboxState.url = path;
+	});
+
 	const docroot = await client.documentRoot;
 	const wpContentPath = `${docroot}/wp-content`;
 
@@ -158,7 +115,7 @@ export async function initApp(root: HTMLElement): Promise<void> {
 		}
 
 		activateTab(filePath);
-		statusText.textContent = `● ${filePath}`;
+		sandboxState.statusText = filePath;
 	});
 
 	// --- Save handler ---
@@ -166,16 +123,10 @@ export async function initApp(root: HTMLElement): Promise<void> {
 		await writeFile(client, path, content);
 		const currentUrl = await client.getCurrentURL();
 		await client.goTo(currentUrl);
-		statusText.textContent = `● Saved: ${path.split('/').pop()}`;
+		sandboxState.statusText = `Saved: ${path.split('/').pop()}`;
 		setTimeout(() => {
-			statusText.textContent = '● Ready';
+			sandboxState.statusText = 'Ready';
 		}, 2000);
-	});
-
-	// --- Refresh button ---
-	refreshBtn.addEventListener('click', async () => {
-		const currentUrl = await client.getCurrentURL();
-		await client.goTo(currentUrl);
 	});
 }
 
@@ -183,6 +134,22 @@ function el(tag: string, className?: string): HTMLElement {
 	const element = document.createElement(tag);
 	if (className) element.className = className;
 	return element;
+}
+
+function mustGet(root: HTMLElement, id: string): HTMLElement {
+	const found = root.querySelector(`#${id}`);
+	if (!(found instanceof HTMLElement)) {
+		throw new Error(`[live-sandbox-editor] Missing element #${id}`);
+	}
+	return found;
+}
+
+function mustQuery(root: HTMLElement, selector: string): HTMLElement {
+	const found = root.querySelector(selector);
+	if (!(found instanceof HTMLElement)) {
+		throw new Error(`[live-sandbox-editor] Missing element ${selector}`);
+	}
+	return found;
 }
 
 function initDragHandle(

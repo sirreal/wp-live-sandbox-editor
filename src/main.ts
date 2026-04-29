@@ -1,4 +1,5 @@
 import './monaco-environment.js';
+import './store.js';
 import { initApp } from './app.js';
 
 const root = document.getElementById('live-sandbox-editor-root');
