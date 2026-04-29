@@ -10,17 +10,31 @@ export interface SandboxState {
 	readonly notReady: boolean;
 }
 
+interface SandboxStore {
+	state: SandboxState;
+	actions: {
+		setUrl(event: Event): void;
+		navigate(event: Event): Generator<Promise<unknown>, void>;
+		refresh(): Generator<Promise<unknown>, void>;
+		boot(
+			iframe: HTMLIFrameElement,
+		): Generator<Promise<unknown>, PlaygroundClient | null>;
+	};
+}
+
 let client: PlaygroundClient | null = null;
 
-export const sandbox = store('live-sandbox-editor/sandbox', {
+// Primitive initial values are authoritative in PHP via
+// `wp_interactivity_state` (see live-sandbox-editor/live-sandbox-editor.php).
+// Only the derived `notReady` getter is declared here; the rest of the shape
+// is supplied by the `SandboxStore` generic and merged from server state at
+// hydration.
+export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 	state: {
-		url: '',
-		statusText: '',
-		isReady: false,
 		get notReady(): boolean {
 			return !sandbox.state.isReady;
 		},
-	} as SandboxState,
+	},
 	actions: {
 		setUrl(event: Event): void {
 			const input = event.target as HTMLInputElement;

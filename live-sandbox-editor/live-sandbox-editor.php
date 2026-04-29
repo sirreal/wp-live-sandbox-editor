@@ -101,6 +101,8 @@ function enqueue_assets( string $hook_suffix ): void {
 		}
 	);
 
+	// Authoritative initial state. JS store ({@see src/store.ts}) only
+	// declares derived getters; primitives live here.
 	wp_interactivity_state(
 		SLUG . '/sandbox',
 		array(
