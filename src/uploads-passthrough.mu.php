@@ -86,9 +86,14 @@ function lse_passthrough_is_skipped( string $url ): bool {
 		if ( false === $dot ) {
 			continue;
 		}
-		$base = substr( $entry, 0, $dot );
-		$ext  = substr( $entry, $dot );
-		if ( str_starts_with( $url, $base . '-' ) && str_ends_with( $url, $ext ) ) {
+		$base   = substr( $entry, 0, $dot );
+		$ext    = substr( $entry, $dot );
+		$prefix = $base . '-';
+		if ( ! str_starts_with( $url, $prefix ) || ! str_ends_with( $url, $ext ) ) {
+			continue;
+		}
+		$middle = substr( $url, strlen( $prefix ), -strlen( $ext ) );
+		if ( preg_match( '/^\d+x\d+$/', $middle ) ) {
 			return true;
 		}
 	}
