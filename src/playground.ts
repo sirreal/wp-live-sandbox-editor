@@ -270,11 +270,16 @@ async function runSqlFromDisk(
 			$wpdb->suppress_errors();
 			$wpdb->hide_errors();
 
-			$sql = file_get_contents('${sqlPath}');
-			$len = strlen($sql);
-			$i = 0;
-			$start = 0;
-			$in_str = false;
+			$fp = fopen('${sqlPath}', 'rb');
+			if (!$fp) {
+				echo json_encode(array(
+					'ok' => 0,
+					'fail' => 1,
+					'sampleErrors' => array(array('error' => 'fopen failed', 'sql' => '${sqlPath}')),
+				));
+				exit;
+			}
+
 			$ok = 0;
 			$fail = 0;
 			$errors = array();
@@ -298,39 +303,64 @@ async function runSqlFromDisk(
 				}
 			};
 
-			while ($i < $len) {
-				$c = $sql[$i];
-				if (!$in_str) {
-					if ($c === '-' && $i + 1 < $len && $sql[$i + 1] === '-') {
-						$nl = strpos($sql, "\\n", $i);
-						$i = ($nl === false) ? $len : $nl + 1;
-						continue;
-					}
-					if ($c === '/' && $i + 1 < $len && $sql[$i + 1] === '*') {
-						$end = strpos($sql, '*/', $i + 2);
-						$i = ($end === false) ? $len : $end + 2;
-						continue;
-					}
-					if ($c === "'") {
-						$in_str = true;
-					} elseif ($c === ';') {
-						$run_stmt(substr($sql, $start, $i - $start + 1));
-						$start = $i + 1;
-					}
-				} else {
-					if ($c === "'") {
-						if ($i + 1 < $len && $sql[$i + 1] === "'") {
-							$i++;
-						} else {
-							$in_str = false;
-						}
+			// Streaming statement splitter. Memory: chunk_size + one statement.
+			// State persists across reads so strings/comments/statements straddling
+			// a chunk boundary are handled identically to the in-memory version.
+			$stmt  = '';
+			$state = 'normal'; // normal | string | line_comment | block_comment
+			$tail  = '';       // 1-byte carry so $next is always defined inside the loop
+
+			$read_failed = false;
+			while (!feof($fp)) {
+				$chunk = fread($fp, 262144);
+				if ($chunk === false) { $read_failed = true; break; }
+				if ($chunk === '') continue;
+
+				$buf  = $tail . $chunk;
+				$blen = strlen($buf);
+				$eof  = feof($fp);
+				$end  = $eof ? $blen : $blen - 1;
+				$tail = $eof ? ''    : $buf[$blen - 1];
+
+				for ($i = 0; $i < $end; $i++) {
+					$c    = $buf[$i];
+					$next = ($i + 1 < $blen) ? $buf[$i + 1] : '';
+
+					if ($state === 'normal') {
+						if ($c === '-' && $next === '-') { $state = 'line_comment';  $i++; continue; }
+						if ($c === '/' && $next === '*') { $state = 'block_comment'; $i++; continue; }
+						if ($c === "'")                  { $state = 'string'; $stmt .= $c; continue; }
+						if ($c === ';')                  { $stmt .= $c; $run_stmt($stmt); $stmt = ''; continue; }
+						$stmt .= $c;
+					} elseif ($state === 'string') {
+						if ($c === "'" && $next === "'") { $stmt .= "''"; $i++; continue; }
+						if ($c === "'")                  { $state = 'normal'; $stmt .= $c; continue; }
+						$stmt .= $c;
+					} elseif ($state === 'line_comment') {
+						if ($c === "\\n") $state = 'normal';
+					} else { // block_comment
+						if ($c === '*' && $next === '/') { $state = 'normal'; $i++; }
 					}
 				}
-				$i++;
+
+				// 2-char-token cases above peek into $buf[$blen-1] (the deferred
+				// byte) and advance $i past it. When that happens the loop exits
+				// with $i > $end; clear $tail so the deferred byte isn't replayed.
+				if ($i > $end) $tail = '';
 			}
-			if ($start < $len) {
-				$run_stmt(substr($sql, $start));
+
+			if ($read_failed) {
+				echo json_encode(array(
+					'ok' => $ok,
+					'fail' => $fail + 1,
+					'sampleErrors' => array_merge($errors, array(array('error' => 'fread failed', 'sql' => '${sqlPath}'))),
+				));
+				fclose($fp);
+				exit;
 			}
+
+			if (trim($stmt) !== '') $run_stmt($stmt);
+			fclose($fp);
 
 			echo json_encode(array(
 				'ok' => $ok,
