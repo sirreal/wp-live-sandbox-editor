@@ -52,7 +52,7 @@ namespace Live_Sandbox_Editor;
 	<div
 		class="lse-main"
 		data-wp-class--editor-open="state.editorOpen"
-		data-wp-watch--editor="callbacks.onEditorOpenChange"
+		data-wp-watch="callbacks.onEditorOpenChange"
 	>
 		<div class="lse-editor-pane">
 			<div class="lse-file-tree">
