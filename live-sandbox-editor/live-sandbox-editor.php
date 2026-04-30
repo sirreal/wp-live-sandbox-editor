@@ -26,6 +26,7 @@ const VERSION    = '0.1';
 
 require_once __DIR__ . '/inc/sync-stream.php';
 require_once __DIR__ . '/inc/manifest.php';
+require_once __DIR__ . '/inc/class-wpdb-pdo-adapter.php';
 
 /**
  * Load vendored Reprint classes only if they are not already defined.
@@ -475,21 +476,25 @@ function rest_sync_db( WP_REST_Request $request ): void {
 	}
 
 	try {
-		// build_pdo_dsn() is provided by reprint-exporter's Composer `files`
-		// autoload; static analysers can't see it.
-		if ( function_exists( 'build_pdo_dsn' ) ) {
-			$dsn = build_pdo_dsn( DB_HOST, DB_NAME );
+		if ( extension_loaded( 'pdo_mysql' ) ) {
+			// build_pdo_dsn() is provided by reprint-exporter's Composer `files`
+			// autoload; static analysers can't see it.
+			if ( function_exists( 'build_pdo_dsn' ) ) {
+				$dsn = build_pdo_dsn( DB_HOST, DB_NAME );
+			} else {
+				$dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4';
+			}
+			// phpcs:disable WordPress.DB.RestrictedClasses.mysql__PDO -- raw PDO is the preferred dump connection when pdo_mysql is loaded; the wpdb adapter is the fallback for hosts without it.
+			$db = new \PDO(
+				$dsn,
+				DB_USER,
+				DB_PASSWORD,
+				array( \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION )
+			);
+			// phpcs:enable WordPress.DB.RestrictedClasses.mysql__PDO
 		} else {
-			$dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4';
+			$db = new Wpdb_Pdo_Adapter( $GLOBALS['wpdb'] );
 		}
-		// phpcs:disable WordPress.DB.RestrictedClasses.mysql__PDO -- $wpdb can't enumerate tables for the dumper; raw PDO is intentional here.
-		$pdo = new \PDO(
-			$dsn,
-			DB_USER,
-			DB_PASSWORD,
-			array( \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION )
-		);
-		// phpcs:enable WordPress.DB.RestrictedClasses.mysql__PDO
 	} catch ( \PDOException $e ) {
 		http_response_code( 500 );
 		Sync_Stream\emit_marker( Sync_Stream\MARKER_ERR, 'db_connect: ' . $e->getMessage() );
@@ -498,7 +503,7 @@ function rest_sync_db( WP_REST_Request $request ): void {
 	}
 
 	$producer = new MySQLDumpProducer(
-		$pdo,
+		$db,
 		array( 'tables_to_process' => $manifest['tables'] )
 	);
 	$encoder  = new Sync_Stream\B64_Streamer();
