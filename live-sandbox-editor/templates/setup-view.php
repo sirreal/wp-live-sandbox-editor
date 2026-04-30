@@ -36,7 +36,7 @@ namespace Live_Sandbox_Editor;
 				<template data-wp-each--item="state.plugins">
 					<li>
 						<label>
-							<input type="checkbox" data-wp-bind--checked="context.item.selected" data-wp-on--change="actions.togglePlugin">
+							<input type="checkbox" data-wp-bind--checked="context.item.selected" data-wp-on--change="actions.toggleItem">
 							<span data-wp-text="context.item.label"></span>
 						</label>
 					</li>
@@ -50,7 +50,7 @@ namespace Live_Sandbox_Editor;
 				<template data-wp-each--item="state.themes">
 					<li>
 						<label>
-							<input type="checkbox" data-wp-bind--checked="context.item.selected" data-wp-on--change="actions.toggleTheme">
+							<input type="checkbox" data-wp-bind--checked="context.item.selected" data-wp-on--change="actions.toggleItem">
 							<span data-wp-text="context.item.label"></span>
 						</label>
 					</li>
@@ -64,7 +64,7 @@ namespace Live_Sandbox_Editor;
 				<template data-wp-each--item="state.tables">
 					<li>
 						<label>
-							<input type="checkbox" data-wp-bind--checked="context.item.selected" data-wp-on--change="actions.toggleTable">
+							<input type="checkbox" data-wp-bind--checked="context.item.selected" data-wp-on--change="actions.toggleItem">
 							<span data-wp-text="context.item.label"></span>
 						</label>
 					</li>

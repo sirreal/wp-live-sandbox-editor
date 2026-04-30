@@ -23,9 +23,7 @@ interface SetupState {
 interface SetupStore {
 	state: SetupState;
 	actions: {
-		togglePlugin(): void;
-		toggleTheme(): void;
-		toggleTable(): void;
+		toggleItem(): void;
 		toggleUploads(): void;
 		retry(): void;
 		run(): void;
@@ -50,15 +48,7 @@ const setup = store<SetupStore>('live-sandbox-editor/setup', {
 		},
 	},
 	actions: {
-		togglePlugin(): void {
-			const ctx = getContext<{ item: Item }>();
-			ctx.item.selected = !ctx.item.selected;
-		},
-		toggleTheme(): void {
-			const ctx = getContext<{ item: Item }>();
-			ctx.item.selected = !ctx.item.selected;
-		},
-		toggleTable(): void {
+		toggleItem(): void {
 			const ctx = getContext<{ item: Item }>();
 			ctx.item.selected = !ctx.item.selected;
 		},
@@ -76,11 +66,9 @@ const setup = store<SetupStore>('live-sandbox-editor/setup', {
 				uploads: setup.state.uploads,
 			};
 			const { runUrl } = getAppData(SETUP_MODULE_ID);
-			const sep = runUrl.includes('?') ? '&' : '?';
-			const url = `${runUrl}${sep}manifest=${encodeURIComponent(
-				JSON.stringify(manifest),
-			)}`;
-			window.location.assign(url);
+			const url = new URL(runUrl, window.location.origin);
+			url.searchParams.set('manifest', JSON.stringify(manifest));
+			window.location.assign(url.toString());
 		},
 	},
 });
@@ -92,7 +80,7 @@ async function loadDefaults(): Promise<void> {
 	setup.state.loadError = false;
 	const { restUrl, nonce } = getAppData(SETUP_MODULE_ID);
 	try {
-		const res = await fetch(`${restUrl}/sync-manifest`, {
+		const res = await fetch(`${restUrl}/sync-manifest?labels=1`, {
 			headers: { 'X-WP-Nonce': nonce, Accept: 'application/json' },
 		});
 		if (!res.ok) {

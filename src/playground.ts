@@ -61,10 +61,7 @@ export async function initPlayground(
 	onStatus('Resolving sync manifest…');
 	const manifestResp = await fetchManifest();
 	const manifest = manifestOverride ?? manifestResp.manifest;
-	const dbContext: ManifestResponse =
-		manifestOverride !== undefined
-			? { ...manifestResp, manifest }
-			: manifestResp;
+	const dbContext: ManifestResponse = { ...manifestResp, manifest };
 
 	if (debugMode) {
 		console.log('[live-sandbox-editor] manifest:', manifest);
