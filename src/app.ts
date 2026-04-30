@@ -204,11 +204,12 @@ function initUrlMenuDismiss(
 	urlFormGroup: HTMLElement,
 	iframe: HTMLIFrameElement,
 ): void {
-	// Keep the URL input focused when a menu item is clicked. Without this,
-	// mousedown on the button steals focus and fires `focusout` on the
-	// input (closing the menu before `click` arrives). preventDefault on
-	// mousedown blocks the focus shift but leaves the click intact.
-	urlFormGroup.addEventListener('mousedown', (e) => {
+	// Keep the URL input focused when a menu item is activated. Without this,
+	// pressing on the button steals focus and fires `focusout` on the input
+	// (closing the menu before `click` arrives). preventDefault on
+	// `pointerdown` blocks the focus shift but leaves the click intact, and
+	// covers mouse, touch, and pen consistently.
+	urlFormGroup.addEventListener('pointerdown', (e) => {
 		const target = e.target;
 		if (target instanceof Element && target.closest('.lse-url-menu-item')) {
 			e.preventDefault();

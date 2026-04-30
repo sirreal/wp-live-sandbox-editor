@@ -84,7 +84,6 @@ $quick_links = array(
 					id="lse-url-menu"
 					class="lse-url-menu"
 					role="menu"
-					data-wp-class--open="state.urlMenuOpen"
 					hidden
 					data-wp-bind--hidden="!state.urlMenuOpen"
 				>
