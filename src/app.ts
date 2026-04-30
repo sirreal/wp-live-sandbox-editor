@@ -1,14 +1,11 @@
-import {
-	addSaveCommand,
-	initEditor,
-	loadFileIntoEditor,
-	showInEditor,
-} from './editor.js';
+import { store } from '@wordpress/interactivity';
 import { initFileExplorer } from './file-explorer.js';
 import { readFile, writeFile } from './filesystem.js';
 import type { SyncManifest } from './playground.js';
 import { sandbox } from './store.js';
 import type { OpenFile } from './types.js';
+
+type EditorMod = typeof import('./editor.js');
 
 export async function initApp(
 	root: HTMLElement,
@@ -22,13 +19,12 @@ export async function initApp(
 	const previewPane = mustQuery(root, '.lse-preview-pane');
 	const iframe = mustQuery(root, '#lse-preview-iframe') as HTMLIFrameElement;
 
-	initEditor(monacoContainer);
 	initDragHandle(dragHandle, editorPane, previewPane);
 
 	const openTabs: OpenFile[] = [];
 	let activeTab: string | null = null;
 
-	function renderTabs(): void {
+	function renderTabs(mod: EditorMod): void {
 		tabStrip.replaceChildren();
 		for (const tab of openTabs) {
 			const tabEl = el('div', 'lse-tab');
@@ -44,53 +40,88 @@ export async function initApp(
 			tabEl.appendChild(labelEl);
 			tabEl.appendChild(closeBtn);
 
-			tabEl.addEventListener('click', () => activateTab(tab.path));
+			tabEl.addEventListener('click', () => activateTab(tab.path, mod));
 			closeBtn.addEventListener('click', (e) => {
 				e.stopPropagation();
-				closeTab(tab.path);
+				closeTab(tab.path, mod);
 			});
 
 			tabStrip.appendChild(tabEl);
 		}
 	}
 
-	function activateTab(path: string): void {
+	function activateTab(path: string, mod: EditorMod): void {
 		activeTab = path;
-		showInEditor(path);
-		renderTabs();
+		mod.showInEditor(path);
+		renderTabs(mod);
 	}
 
-	function closeTab(path: string): void {
+	function closeTab(path: string, mod: EditorMod): void {
 		const idx = openTabs.findIndex((t) => t.path === path);
 		openTabs.splice(idx, 1);
 		if (activeTab === path) {
 			activeTab = openTabs[idx]?.path ?? openTabs[idx - 1]?.path ?? null;
-			showInEditor(activeTab);
+			mod.showInEditor(activeTab);
 		}
-		renderTabs();
+		renderTabs(mod);
 	}
+
+	let saveHandler: ((path: string, content: string) => Promise<void>) | null =
+		null;
+
+	let editorLoadPromise: Promise<EditorMod> | null = null;
+	function ensureEditorLoaded(): Promise<EditorMod> {
+		if (!editorLoadPromise) {
+			editorLoadPromise = (async () => {
+				// editor.js side-effect-imports monaco-environment.js, so
+				// MonacoEnvironment is registered before monaco.editor.create().
+				const mod = await import('./editor.js');
+				mod.initEditor(monacoContainer);
+				if (saveHandler) mod.addSaveCommand(saveHandler);
+				// Belt-and-suspenders: Monaco's automaticLayout ResizeObserver
+				// can lag a frame on first reveal of a previously-hidden
+				// container; force a sync layout against real dims.
+				requestAnimationFrame(() => mod.getEditor()?.layout());
+				return mod;
+			})();
+		}
+		return editorLoadPromise;
+	}
+
+	// Register the data-wp-watch callback synchronously, before the boot
+	// await — so any toggle click after hydration finds it. The
+	// Interactivity API's store() merges successive registrations to the
+	// same namespace.
+	store('live-sandbox-editor/sandbox', {
+		callbacks: {
+			*onEditorOpenChange(): Generator<Promise<unknown>, void> {
+				if (sandbox.state.editorOpen) {
+					yield ensureEditorLoaded();
+					fileTreeBody.focus();
+				} else {
+					// Clear inline widths set by the drag handle: their
+					// `width:Npx` would otherwise pin the preview pane to its
+					// dragged width when the editor pane is hidden, leaving an
+					// empty gap where the editor used to be.
+					editorPane.style.cssText = '';
+					previewPane.style.cssText = '';
+					const btn = root.querySelector<HTMLElement>(
+						'[data-wp-on--click="actions.toggleEditor"]',
+					);
+					btn?.focus();
+				}
+			},
+		},
+	});
 
 	const client = await sandbox.actions.boot(iframe, manifestOverride);
 	if (!client) return;
 
-	const docroot = await client.documentRoot;
-	const wpContentPath = `${docroot}/wp-content`;
-
-	initFileExplorer(fileTreeBody, client, wpContentPath, async (filePath) => {
-		const existingTab = openTabs.find((t) => t.path === filePath);
-		const label = filePath.split('/').pop() ?? filePath;
-
-		if (!existingTab) {
-			const content = await readFile(client, filePath);
-			openTabs.push({ path: filePath, label });
-			loadFileIntoEditor(filePath, content);
-		}
-
-		activateTab(filePath);
-		sandbox.state.statusText = filePath;
-	});
-
-	addSaveCommand(async (path, content) => {
+	// Assign saveHandler before any further awaits — closes a window where
+	// a toggle click between boot resolving and saveHandler being set could
+	// run ensureEditorLoaded with a null saveHandler and leave Cmd-S
+	// unregistered.
+	saveHandler = async (path, content) => {
 		await writeFile(client, path, content);
 		const currentUrl = await client.getCurrentURL();
 		await client.goTo(currentUrl);
@@ -101,6 +132,24 @@ export async function initApp(
 				sandbox.state.statusText = 'Ready';
 			}
 		}, 2000);
+	};
+
+	const docroot = await client.documentRoot;
+	const wpContentPath = `${docroot}/wp-content`;
+
+	initFileExplorer(fileTreeBody, client, wpContentPath, async (filePath) => {
+		const mod = await ensureEditorLoaded();
+		const existingTab = openTabs.find((t) => t.path === filePath);
+		const label = filePath.split('/').pop() ?? filePath;
+
+		if (!existingTab) {
+			const content = await readFile(client, filePath);
+			openTabs.push({ path: filePath, label });
+			mod.loadFileIntoEditor(filePath, content);
+		}
+
+		activateTab(filePath, mod);
+		sandbox.state.statusText = filePath;
 	});
 }
 

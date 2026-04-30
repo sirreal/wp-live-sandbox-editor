@@ -1,3 +1,7 @@
+// Side-effect import: registers self.MonacoEnvironment.getWorker before any
+// monaco.editor.create() runs. Keep above the monaco import so worker
+// bindings are in place when monaco's static graph initialises.
+import './monaco-environment.js';
 import * as monaco from 'monaco-editor';
 
 let editor: monaco.editor.IStandaloneCodeEditor | null = null;
@@ -33,6 +37,10 @@ export function showInEditor(path: string | null): void {
 	}
 	const model = models.get(path);
 	if (model) editor.setModel(model);
+}
+
+export function getEditor(): monaco.editor.IStandaloneCodeEditor | null {
+	return editor;
 }
 
 export function getCurrentPath(): string | null {

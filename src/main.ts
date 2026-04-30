@@ -1,4 +1,3 @@
-import './monaco-environment.js';
 import { initApp } from './app.js';
 import type { SyncManifest } from './playground.js';
 

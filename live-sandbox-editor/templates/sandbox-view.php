@@ -16,11 +16,48 @@ namespace Live_Sandbox_Editor;
 
 ?>
 <div id="live-sandbox-editor-root" data-wp-interactive="live-sandbox-editor/sandbox">
-	<div class="lse-main">
+	<div class="lse-toolbar">
+		<button
+			type="button"
+			class="lse-toolbar-btn"
+			data-wp-on--click="actions.toggleEditor"
+			data-wp-bind--disabled="state.notReady"
+			data-wp-bind--aria-pressed="state.editorOpen"
+			disabled
+			aria-label="Toggle code editor"
+		><span class="dashicons dashicons-editor-code" aria-hidden="true"></span></button>
+		<button
+			type="button"
+			class="lse-toolbar-btn"
+			data-wp-on--click="actions.refresh"
+			data-wp-bind--disabled="state.notReady"
+			disabled
+			aria-label="Refresh"
+		>↺</button>
+		<form class="lse-url-form" data-wp-on--submit="actions.navigate">
+			<input
+				type="text"
+				class="lse-url-input"
+				placeholder="/wp-admin/"
+				data-wp-bind--value="state.url"
+				data-wp-bind--disabled="state.notReady"
+				data-wp-on--input="actions.setUrl"
+				aria-label="URL to visit in the playground"
+				autocomplete="off"
+				spellcheck="false"
+				disabled
+			>
+		</form>
+	</div>
+	<div
+		class="lse-main"
+		data-wp-class--editor-open="state.editorOpen"
+		data-wp-watch--editor="callbacks.onEditorOpenChange"
+	>
 		<div class="lse-editor-pane">
 			<div class="lse-file-tree">
 				<div class="lse-file-tree-header">Files</div>
-				<div id="lse-file-tree-body" class="lse-file-tree-body"></div>
+				<div id="lse-file-tree-body" class="lse-file-tree-body" tabindex="-1"></div>
 			</div>
 			<div class="lse-monaco-section">
 				<div id="lse-tabs" class="lse-tabs"></div>
@@ -29,31 +66,6 @@ namespace Live_Sandbox_Editor;
 		</div>
 		<div id="lse-drag-handle" class="lse-drag-handle"></div>
 		<div class="lse-preview-pane">
-			<div class="lse-preview-toolbar">
-				<button
-					type="button"
-					class="lse-toolbar-btn"
-					data-wp-on--click="actions.refresh"
-					data-wp-bind--disabled="state.notReady"
-					disabled
-					title="Refresh"
-					aria-label="Refresh"
-				>↺</button>
-				<form class="lse-url-form" data-wp-on--submit="actions.navigate">
-					<input
-						type="text"
-						class="lse-url-input"
-						placeholder="/wp-admin/"
-						data-wp-bind--value="state.url"
-						data-wp-bind--disabled="state.notReady"
-						data-wp-on--input="actions.setUrl"
-						aria-label="URL to visit in the playground"
-						autocomplete="off"
-						spellcheck="false"
-						disabled
-					>
-				</form>
-			</div>
 			<iframe id="lse-preview-iframe" class="lse-preview-iframe" allow="cross-origin-isolated"></iframe>
 		</div>
 	</div>

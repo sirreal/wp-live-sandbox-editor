@@ -107,6 +107,7 @@ function enqueue_assets( string $hook_suffix ): void {
 			'url'        => '',
 			'statusText' => 'Initializing…',
 			'isReady'    => false,
+			'editorOpen' => false,
 		)
 	);
 

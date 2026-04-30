@@ -38,6 +38,16 @@ export default defineConfig({
 				// dynamic chunks and share `./monaco-[hash].js` with main.js.
 				codeSplitting: {
 					groups: [
+						// Vite's __vitePreload helper is a synthetic module shared
+						// between any chunk that performs dynamic imports. Without
+						// pinning it to its own chunk, rolldown hoists it into the
+						// largest consumer (here: monaco), which forces main.js to
+						// statically import the monaco chunk just to reach the
+						// helper — defeating the lazy-load goal.
+						{
+							name: 'preload-helper',
+							test: (id) => id.includes('preload-helper'),
+						},
 						{
 							name: 'monaco',
 							test: (id) =>
