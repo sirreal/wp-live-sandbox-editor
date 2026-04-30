@@ -92,7 +92,6 @@ $quick_links = array(
 							type="button"
 							role="menuitem"
 							class="lse-url-menu-item"
-							tabindex="-1"
 							data-wp-context="<?php echo esc_attr( wp_json_encode( array( 'path' => $link['path'] ) ) ); ?>"
 							data-wp-on--click="actions.quickNavigate"
 						>

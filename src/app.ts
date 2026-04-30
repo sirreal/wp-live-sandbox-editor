@@ -19,9 +19,12 @@ export async function initApp(
 	const previewPane = mustQuery(root, '.lse-preview-pane');
 	const iframe = mustQuery(root, '#lse-preview-iframe') as HTMLIFrameElement;
 	const urlFormGroup = mustQuery(root, '.lse-url-form-group');
+	const urlInput = mustQuery(root, '.lse-url-input') as HTMLInputElement;
+	const urlMenu = mustQuery(root, '#lse-url-menu');
 
 	initDragHandle(dragHandle, editorPane, previewPane);
 	initUrlMenuDismiss(urlFormGroup, iframe);
+	initUrlMenuKeyboard(urlInput, urlMenu);
 
 	const openTabs: OpenFile[] = [];
 	let activeTab: string | null = null;
@@ -239,6 +242,62 @@ function initUrlMenuDismiss(
 	// input doesn't currently hold focus.
 	iframe.addEventListener('focus', () => {
 		sandbox.state.urlMenuOpen = false;
+	});
+}
+
+function initUrlMenuKeyboard(input: HTMLInputElement, menu: HTMLElement): void {
+	const items = (): HTMLButtonElement[] =>
+		Array.from(menu.querySelectorAll<HTMLButtonElement>('.lse-url-menu-item'));
+
+	input.addEventListener('keydown', (e) => {
+		if (e.key !== 'ArrowDown') return;
+		e.preventDefault();
+		const wasOpen = sandbox.state.urlMenuOpen;
+		sandbox.state.urlMenuOpen = true;
+		// `hidden` removal is applied async by the Interactivity API's signal
+		// flush (microtask). A hidden element can't receive focus, so wait
+		// one tick when opening from a closed state.
+		if (wasOpen) {
+			items()[0]?.focus();
+		} else {
+			queueMicrotask(() => items()[0]?.focus());
+		}
+	});
+
+	menu.addEventListener('keydown', (e) => {
+		const target = e.target;
+		if (
+			!(target instanceof HTMLElement) ||
+			!target.classList.contains('lse-url-menu-item')
+		) {
+			return;
+		}
+		const list = items();
+		const idx = list.indexOf(target as HTMLButtonElement);
+		switch (e.key) {
+			case 'ArrowDown':
+				e.preventDefault();
+				list[(idx + 1) % list.length]?.focus();
+				break;
+			case 'ArrowUp':
+				e.preventDefault();
+				if (idx === 0) input.focus();
+				else list[idx - 1]?.focus();
+				break;
+			case 'Home':
+				e.preventDefault();
+				list[0]?.focus();
+				break;
+			case 'End':
+				e.preventDefault();
+				list[list.length - 1]?.focus();
+				break;
+			case 'Escape':
+				// Document-level Escape handler closes the menu; refocus the
+				// input here so the user can keep typing without re-clicking.
+				input.focus();
+				break;
+		}
 	});
 }
 

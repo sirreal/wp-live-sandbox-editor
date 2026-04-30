@@ -30,6 +30,11 @@ interface SandboxStore {
 
 let client: PlaygroundClient | null = null;
 
+// Set by quickNavigate when it programmatically refocuses the URL input
+// after a keyboard activation; consumed by openUrlMenu so the resulting
+// focus event doesn't immediately reopen the menu we just closed.
+let suppressNextOpen = false;
+
 // Primitive initial values are authoritative in PHP via
 // `wp_interactivity_state` (see live-sandbox-editor/live-sandbox-editor.php).
 // Only the derived `notReady` getter is declared here; the rest of the shape
@@ -61,12 +66,26 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 			sandbox.state.editorOpen = !sandbox.state.editorOpen;
 		},
 		openUrlMenu(): void {
+			if (suppressNextOpen) {
+				suppressNextOpen = false;
+				return;
+			}
 			sandbox.state.urlMenuOpen = true;
 		},
 		*quickNavigate(): Generator<Promise<unknown>, void> {
 			const { path } = getContext<{ path: string }>();
 			sandbox.state.urlMenuOpen = false;
 			sandbox.state.url = path;
+			// Keyboard activation (Enter/Space) leaves focus on the menu
+			// button that the bound `hidden` then makes invisible — focus
+			// would fall back to body. Move it to the URL input so the user
+			// can keep typing. The suppress flag stops the focus event from
+			// reopening the menu.
+			const input = document.querySelector<HTMLInputElement>('.lse-url-input');
+			if (input && document.activeElement !== input) {
+				suppressNextOpen = true;
+				input.focus();
+			}
 			if (!client) return;
 			yield client.goTo(path);
 		},
