@@ -104,10 +104,11 @@ function enqueue_assets( string $hook_suffix ): void {
 	wp_interactivity_state(
 		SLUG . '/sandbox',
 		array(
-			'url'        => '',
-			'statusText' => 'Initializing…',
-			'isReady'    => false,
-			'editorOpen' => false,
+			'url'         => '',
+			'statusText'  => 'Initializing…',
+			'isReady'     => false,
+			'editorOpen'  => false,
+			'urlMenuOpen' => false,
 		)
 	);
 

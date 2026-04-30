@@ -14,6 +14,33 @@ namespace Live_Sandbox_Editor;
 
 \defined( 'ABSPATH' ) || exit;
 
+$quick_links = array(
+	array(
+		'label' => __( 'Homepage', 'live-sandbox-editor' ),
+		'path'  => '/',
+	),
+	array(
+		'label' => __( 'Dashboard', 'live-sandbox-editor' ),
+		'path'  => '/wp-admin/',
+	),
+	array(
+		'label' => __( 'Site Editor', 'live-sandbox-editor' ),
+		'path'  => '/wp-admin/site-editor.php',
+	),
+	array(
+		'label' => __( 'New Post', 'live-sandbox-editor' ),
+		'path'  => '/wp-admin/post-new.php',
+	),
+	array(
+		'label' => __( 'Plugins', 'live-sandbox-editor' ),
+		'path'  => '/wp-admin/plugins.php',
+	),
+	array(
+		'label' => __( 'Themes', 'live-sandbox-editor' ),
+		'path'  => '/wp-admin/themes.php',
+	),
+);
+
 ?>
 <div id="live-sandbox-editor-root" data-wp-interactive="live-sandbox-editor/sandbox">
 	<div class="lse-toolbar">
@@ -35,18 +62,53 @@ namespace Live_Sandbox_Editor;
 			aria-label="Refresh"
 		>↺</button>
 		<form class="lse-url-form" data-wp-on--submit="actions.navigate">
-			<input
-				type="text"
-				class="lse-url-input"
-				placeholder="/wp-admin/"
-				data-wp-bind--value="state.url"
-				data-wp-bind--disabled="state.notReady"
-				data-wp-on--input="actions.setUrl"
-				aria-label="URL to visit in the playground"
-				autocomplete="off"
-				spellcheck="false"
-				disabled
-			>
+			<div class="lse-url-form-group">
+				<input
+					type="text"
+					class="lse-url-input"
+					placeholder="/wp-admin/"
+					data-wp-bind--value="state.url"
+					data-wp-bind--disabled="state.notReady"
+					data-wp-on--input="actions.setUrl"
+					data-wp-on--keydown="actions.onUrlInputKeydown"
+					aria-label="URL to visit in the playground"
+					autocomplete="off"
+					spellcheck="false"
+					disabled
+				>
+				<button
+					type="button"
+					class="lse-url-menu-toggle"
+					data-wp-on--click="actions.toggleUrlMenu"
+					data-wp-bind--disabled="state.notReady"
+					data-wp-bind--aria-expanded="state.urlMenuOpen"
+					aria-haspopup="menu"
+					aria-controls="lse-url-menu"
+					aria-label="Quick links"
+					disabled
+				>▾</button>
+				<div
+					id="lse-url-menu"
+					class="lse-url-menu"
+					role="menu"
+					data-wp-class--open="state.urlMenuOpen"
+					hidden
+					data-wp-bind--hidden="!state.urlMenuOpen"
+				>
+					<?php foreach ( $quick_links as $link ) : ?>
+						<button
+							type="button"
+							role="menuitem"
+							class="lse-url-menu-item"
+							data-wp-context="<?php echo esc_attr( wp_json_encode( array( 'path' => $link['path'] ) ) ); ?>"
+							data-wp-on--click="actions.quickNavigate"
+						>
+							<span class="lse-url-menu-label"><?php echo esc_html( $link['label'] ); ?></span>
+							<span class="lse-url-menu-path"><?php echo esc_html( $link['path'] ); ?></span>
+						</button>
+					<?php endforeach; ?>
+				</div>
+			</div>
 		</form>
 	</div>
 	<div

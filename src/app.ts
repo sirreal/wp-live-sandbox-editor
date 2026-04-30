@@ -18,8 +18,10 @@ export async function initApp(
 	const editorPane = mustQuery(root, '.lse-editor-pane');
 	const previewPane = mustQuery(root, '.lse-preview-pane');
 	const iframe = mustQuery(root, '#lse-preview-iframe') as HTMLIFrameElement;
+	const urlFormGroup = mustQuery(root, '.lse-url-form-group');
 
 	initDragHandle(dragHandle, editorPane, previewPane);
+	initUrlMenuDismiss(urlFormGroup);
 
 	const openTabs: OpenFile[] = [];
 	let activeTab: string | null = null;
@@ -193,6 +195,23 @@ function mustQuery(root: HTMLElement, selector: string): HTMLElement {
 		throw new Error(`[live-sandbox-editor] Missing element ${selector}`);
 	}
 	return found;
+}
+
+function initUrlMenuDismiss(urlFormGroup: HTMLElement): void {
+	// The Interactivity API doesn't expose a generic "click outside" hook,
+	// so close the menu here when a pointerdown lands outside the URL form
+	// group (input + chevron + popover) or when Escape is pressed.
+	document.addEventListener('pointerdown', (e) => {
+		if (!sandbox.state.urlMenuOpen) return;
+		const target = e.target;
+		if (target instanceof Node && urlFormGroup.contains(target)) return;
+		sandbox.state.urlMenuOpen = false;
+	});
+	document.addEventListener('keydown', (e) => {
+		if (e.key === 'Escape' && sandbox.state.urlMenuOpen) {
+			sandbox.state.urlMenuOpen = false;
+		}
+	});
 }
 
 function initDragHandle(
