@@ -89,16 +89,24 @@ async function loadDefaults(): Promise<void> {
 		const data = (await res.json()) as ManifestResponse;
 		const pluginLabels = data.pluginLabels ?? {};
 		const themeLabels = data.themeLabels ?? {};
-		setup.state.plugins = data.manifest.plugins.map((id) => ({
-			id,
-			label: pluginLabels[id] ?? id,
-			selected: true,
-		}));
-		setup.state.themes = data.manifest.themes.map((id) => ({
-			id,
-			label: themeLabels[id] ?? id,
-			selected: true,
-		}));
+		const activePlugins = new Set(data.manifest.plugins);
+		const activeThemes = new Set(data.manifest.themes);
+		const byLabel = (a: Item, b: Item): number =>
+			a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
+		setup.state.plugins = Object.entries(pluginLabels)
+			.map(([id, label]) => ({
+				id,
+				label,
+				selected: activePlugins.has(id),
+			}))
+			.sort(byLabel);
+		setup.state.themes = Object.entries(themeLabels)
+			.map(([id, label]) => ({
+				id,
+				label,
+				selected: activeThemes.has(id),
+			}))
+			.sort(byLabel);
 		setup.state.tables = data.manifest.tables.map((id) => ({
 			id,
 			label: id,
