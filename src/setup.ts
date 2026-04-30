@@ -75,6 +75,18 @@ const setup = store<SetupStore>('live-sandbox-editor/setup', {
 
 void loadDefaults();
 
+function buildItems(
+	labels: Record<string, string> | undefined,
+	active: string[],
+): Item[] {
+	const activeSet = new Set(active);
+	return Object.entries(labels ?? {})
+		.map(([id, label]) => ({ id, label, selected: activeSet.has(id) }))
+		.sort((a, b) =>
+			a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }),
+		);
+}
+
 async function loadDefaults(): Promise<void> {
 	setup.state.loading = true;
 	setup.state.loadError = false;
@@ -87,18 +99,8 @@ async function loadDefaults(): Promise<void> {
 			throw new Error(`sync-manifest failed: ${res.status}`);
 		}
 		const data = (await res.json()) as ManifestResponse;
-		const pluginLabels = data.pluginLabels ?? {};
-		const themeLabels = data.themeLabels ?? {};
-		setup.state.plugins = data.manifest.plugins.map((id) => ({
-			id,
-			label: pluginLabels[id] ?? id,
-			selected: true,
-		}));
-		setup.state.themes = data.manifest.themes.map((id) => ({
-			id,
-			label: themeLabels[id] ?? id,
-			selected: true,
-		}));
+		setup.state.plugins = buildItems(data.pluginLabels, data.manifest.plugins);
+		setup.state.themes = buildItems(data.themeLabels, data.manifest.themes);
 		setup.state.tables = data.manifest.tables.map((id) => ({
 			id,
 			label: id,

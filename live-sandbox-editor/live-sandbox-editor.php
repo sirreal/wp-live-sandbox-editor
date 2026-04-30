@@ -281,28 +281,27 @@ function rest_sync_manifest( WP_REST_Request $request ): array {
 		'uploadsUrl' => $uploads_url,
 	);
 
-	// Display labels are only used by the Setup view. Computing them
-	// requires walking every installed plugin via `get_plugins()`, so
-	// callers opt in with `?labels=1` to keep the run-page boot cheap.
+	// Setup-only: walking every installed plugin/theme is opt-in via
+	// `?labels=1` so the run-page boot stays cheap.
 	if ( ! $request->get_param( 'labels' ) ) {
 		return $response;
 	}
 
 	// `get_plugins()` is admin-only and not autoloaded for REST callbacks.
 	require_once ABSPATH . 'wp-admin/includes/plugin.php';
-	$all_plugins   = get_plugins();
 	$plugin_labels = array();
-	foreach ( $manifest['plugins'] as $entry ) {
-		$plugin_labels[ $entry ] = isset( $all_plugins[ $entry ]['Name'] )
-			? (string) $all_plugins[ $entry ]['Name']
-			: $entry;
+	foreach ( get_plugins() as $entry => $data ) {
+		if ( Manifest\is_self_plugin_entry( $entry ) ) {
+			continue;
+		}
+		$name                    = isset( $data['Name'] ) ? (string) $data['Name'] : '';
+		$plugin_labels[ $entry ] = '' !== $name ? $name : $entry;
 	}
 
 	$theme_labels = array();
-	foreach ( $manifest['themes'] as $slug ) {
-		$theme                 = wp_get_theme( $slug );
-		$name                  = $theme->exists() ? (string) $theme->get( 'Name' ) : $slug;
-		$theme_labels[ $slug ] = '' !== $name ? $name : $slug;
+	foreach ( wp_get_themes() as $slug => $theme ) {
+		$name                          = (string) $theme->get( 'Name' );
+		$theme_labels[ (string) $slug ] = '' !== $name ? $name : (string) $slug;
 	}
 
 	$response['pluginLabels'] = $plugin_labels;
