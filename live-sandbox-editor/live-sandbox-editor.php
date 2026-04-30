@@ -140,24 +140,20 @@ function page_for_screen( string $hook_or_screen_id ): ?string {
 /**
  * Script-module data shared by both pages. Sync type with AppData TS interface.
  *
- * @phpstan-return array{
- *                   restUrl: string;
- *                   nonce: string;
- *                   siteUrl: string;
- *                   runUrl: string;
- *                   scriptDebug: bool;
- *                   wpDebug: bool;
- *                 }
+ * @param array<string,mixed> $data Existing filtered data.
  * @return array<string,mixed>
  */
-function app_data(): array {
-	return array(
-		'restUrl'     => rest_url( SLUG . '/v1' ),
-		'nonce'       => wp_create_nonce( 'wp_rest' ),
-		'siteUrl'     => get_site_url(),
-		'runUrl'      => menu_page_url( SLUG, false ),
-		'scriptDebug' => defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG,
-		'wpDebug'     => defined( 'WP_DEBUG' ) && WP_DEBUG,
+function app_data( array $data ): array {
+	return array_merge(
+		$data,
+		array(
+			'restUrl'     => rest_url( SLUG . '/v1' ),
+			'nonce'       => wp_create_nonce( 'wp_rest' ),
+			'siteUrl'     => get_site_url(),
+			'runUrl'      => menu_page_url( SLUG, false ),
+			'scriptDebug' => defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG,
+			'wpDebug'     => defined( 'WP_DEBUG' ) && WP_DEBUG,
+		)
 	);
 }
 

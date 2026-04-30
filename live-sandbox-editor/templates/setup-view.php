@@ -29,7 +29,7 @@ namespace Live_Sandbox_Editor;
 		</button>
 	</div>
 
-	<div data-wp-class--lse-hidden="state.loading">
+	<div data-wp-class--lse-hidden="state.loading || state.loadError">
 		<fieldset class="lse-setup-group">
 			<legend><?php esc_html_e( 'Plugins', 'live-sandbox-editor' ); ?></legend>
 			<ul>
