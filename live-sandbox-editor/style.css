@@ -48,9 +48,10 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 	overflow: hidden;
 }
 
-/* Editor pane: file tree + Monaco */
+/* Editor pane: file tree + Monaco. Hidden by default; .lse-main.editor-open
+   re-enables it. */
 .lse-editor-pane {
-	display: flex;
+	display: none;
 	flex: 1;
 	min-width: 0;
 	overflow: hidden;
@@ -157,28 +158,44 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 	flex: 1;
 }
 
-/* Drag handle */
+/* Drag handle (hidden by default; shown when editor is open) */
 .lse-drag-handle {
 	width: 4px;
 	background: #3c3c3c;
 	cursor: col-resize;
 	flex-shrink: 0;
+	display: none;
 }
 
 .lse-drag-handle:hover {
 	background: #007acc;
 }
 
-/* Preview pane */
+/* Preview pane fills the row when the editor is closed. */
 .lse-preview-pane {
-	width: 40%;
-	min-width: 280px;
-	flex-shrink: 0;
+	flex: 1;
+	min-width: 0;
 	display: flex;
 	flex-direction: column;
 }
 
-.lse-preview-toolbar {
+/* When the editor is open, restore the default split layout. */
+.lse-main.editor-open .lse-editor-pane {
+	display: flex;
+}
+
+.lse-main.editor-open .lse-drag-handle {
+	display: block;
+}
+
+.lse-main.editor-open .lse-preview-pane {
+	flex: 0 0 auto;
+	width: 40%;
+	min-width: 280px;
+}
+
+/* Top toolbar (full width, lifted from the preview pane). */
+.lse-toolbar {
 	min-height: 36px;
 	background: #2d2d2d;
 	border-bottom: 1px solid #3c3c3c;
@@ -200,6 +217,19 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 	font-size: 14px;
 	line-height: 1;
 	flex-shrink: 0;
+}
+
+.lse-toolbar-btn .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+	vertical-align: -3px;
+}
+
+.lse-toolbar-btn[aria-pressed="true"] {
+	background: #094771;
+	color: #fff;
+	border-color: #094771;
 }
 
 .lse-toolbar-btn:hover {

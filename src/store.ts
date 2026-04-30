@@ -7,6 +7,7 @@ export interface SandboxState {
 	url: string;
 	statusText: string;
 	isReady: boolean;
+	editorOpen: boolean;
 	readonly notReady: boolean;
 }
 
@@ -16,6 +17,7 @@ interface SandboxStore {
 		setUrl(event: Event): void;
 		navigate(event: Event): Generator<Promise<unknown>, void>;
 		refresh(): Generator<Promise<unknown>, void>;
+		toggleEditor(): void;
 		boot(
 			iframe: HTMLIFrameElement,
 			manifestOverride?: SyncManifest,
@@ -50,6 +52,9 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 			if (!client) return;
 			const currentUrl = (yield client.getCurrentURL()) as string;
 			yield client.goTo(currentUrl);
+		},
+		toggleEditor(): void {
+			sandbox.state.editorOpen = !sandbox.state.editorOpen;
 		},
 		*boot(
 			iframe: HTMLIFrameElement,
