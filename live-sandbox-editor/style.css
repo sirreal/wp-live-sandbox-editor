@@ -282,28 +282,6 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 	outline: none;
 }
 
-.lse-url-menu-toggle {
-	background: transparent;
-	color: #999;
-	border: none;
-	border-left: 1px solid #3c3c3c;
-	padding: 0 8px;
-	cursor: pointer;
-	font-size: 12px;
-	line-height: 1;
-	flex-shrink: 0;
-}
-
-.lse-url-menu-toggle:hover:not(:disabled) {
-	color: #fff;
-	background: #2a2d2e;
-}
-
-.lse-url-menu-toggle:disabled {
-	opacity: 0.5;
-	cursor: not-allowed;
-}
-
 .lse-url-menu {
 	position: absolute;
 	top: calc(100% + 4px);

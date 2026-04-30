@@ -69,24 +69,16 @@ $quick_links = array(
 					placeholder="/wp-admin/"
 					data-wp-bind--value="state.url"
 					data-wp-bind--disabled="state.notReady"
+					data-wp-bind--aria-expanded="state.urlMenuOpen"
 					data-wp-on--input="actions.setUrl"
-					data-wp-on--keydown="actions.onUrlInputKeydown"
+					data-wp-on--focus="actions.openUrlMenu"
 					aria-label="URL to visit in the playground"
+					aria-haspopup="menu"
+					aria-controls="lse-url-menu"
 					autocomplete="off"
 					spellcheck="false"
 					disabled
 				>
-				<button
-					type="button"
-					class="lse-url-menu-toggle"
-					data-wp-on--click="actions.toggleUrlMenu"
-					data-wp-bind--disabled="state.notReady"
-					data-wp-bind--aria-expanded="state.urlMenuOpen"
-					aria-haspopup="menu"
-					aria-controls="lse-url-menu"
-					aria-label="Quick links"
-					disabled
-				>▾</button>
 				<div
 					id="lse-url-menu"
 					class="lse-url-menu"
@@ -100,6 +92,7 @@ $quick_links = array(
 							type="button"
 							role="menuitem"
 							class="lse-url-menu-item"
+							tabindex="-1"
 							data-wp-context="<?php echo esc_attr( wp_json_encode( array( 'path' => $link['path'] ) ) ); ?>"
 							data-wp-on--click="actions.quickNavigate"
 						>

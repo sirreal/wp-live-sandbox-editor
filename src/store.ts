@@ -19,10 +19,8 @@ interface SandboxStore {
 		navigate(event: Event): Generator<Promise<unknown>, void>;
 		refresh(): Generator<Promise<unknown>, void>;
 		toggleEditor(): void;
-		toggleUrlMenu(): void;
-		closeUrlMenu(): void;
+		openUrlMenu(): void;
 		quickNavigate(): Generator<Promise<unknown>, void>;
-		onUrlInputKeydown(event: KeyboardEvent): void;
 		boot(
 			iframe: HTMLIFrameElement,
 			manifestOverride?: SyncManifest,
@@ -62,11 +60,8 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 		toggleEditor(): void {
 			sandbox.state.editorOpen = !sandbox.state.editorOpen;
 		},
-		toggleUrlMenu(): void {
-			sandbox.state.urlMenuOpen = !sandbox.state.urlMenuOpen;
-		},
-		closeUrlMenu(): void {
-			sandbox.state.urlMenuOpen = false;
+		openUrlMenu(): void {
+			sandbox.state.urlMenuOpen = true;
 		},
 		*quickNavigate(): Generator<Promise<unknown>, void> {
 			const { path } = getContext<{ path: string }>();
@@ -74,16 +69,6 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 			sandbox.state.url = path;
 			if (!client) return;
 			yield client.goTo(path);
-		},
-		onUrlInputKeydown(event: KeyboardEvent): void {
-			if (event.key === 'Escape' && sandbox.state.urlMenuOpen) {
-				sandbox.state.urlMenuOpen = false;
-				return;
-			}
-			if (event.key === 'ArrowDown' && !sandbox.state.urlMenuOpen) {
-				event.preventDefault();
-				sandbox.state.urlMenuOpen = true;
-			}
 		},
 		*boot(
 			iframe: HTMLIFrameElement,

@@ -21,7 +21,7 @@ export async function initApp(
 	const urlFormGroup = mustQuery(root, '.lse-url-form-group');
 
 	initDragHandle(dragHandle, editorPane, previewPane);
-	initUrlMenuDismiss(urlFormGroup);
+	initUrlMenuDismiss(urlFormGroup, iframe);
 
 	const openTabs: OpenFile[] = [];
 	let activeTab: string | null = null;
@@ -197,10 +197,32 @@ function mustQuery(root: HTMLElement, selector: string): HTMLElement {
 	return found;
 }
 
-function initUrlMenuDismiss(urlFormGroup: HTMLElement): void {
-	// The Interactivity API doesn't expose a generic "click outside" hook,
-	// so close the menu here when a pointerdown lands outside the URL form
-	// group (input + chevron + popover) or when Escape is pressed.
+function initUrlMenuDismiss(
+	urlFormGroup: HTMLElement,
+	iframe: HTMLIFrameElement,
+): void {
+	// Keep the URL input focused when a menu item is clicked. Without this,
+	// mousedown on the button steals focus and fires `focusout` on the
+	// input (closing the menu before `click` arrives). preventDefault on
+	// mousedown blocks the focus shift but leaves the click intact.
+	urlFormGroup.addEventListener('mousedown', (e) => {
+		const target = e.target;
+		if (target instanceof Element && target.closest('.lse-url-menu-item')) {
+			e.preventDefault();
+		}
+	});
+	// Close on focus moving outside the form group. relatedTarget is null
+	// when focus moves into a cross-origin iframe (the preview), so that
+	// case is covered too.
+	urlFormGroup.addEventListener('focusout', (e) => {
+		if (!sandbox.state.urlMenuOpen) return;
+		const next = e.relatedTarget;
+		if (next instanceof Node && urlFormGroup.contains(next)) return;
+		sandbox.state.urlMenuOpen = false;
+	});
+	// Belt-and-suspenders: focusout already covers most outside-click and
+	// iframe-focus paths, but a click on a non-focusable element outside the
+	// form group leaves the input focused — this catches that.
 	document.addEventListener('pointerdown', (e) => {
 		if (!sandbox.state.urlMenuOpen) return;
 		const target = e.target;
@@ -211,6 +233,12 @@ function initUrlMenuDismiss(urlFormGroup: HTMLElement): void {
 		if (e.key === 'Escape' && sandbox.state.urlMenuOpen) {
 			sandbox.state.urlMenuOpen = false;
 		}
+	});
+	// Pointer events inside the cross-origin preview iframe don't bubble to
+	// the parent document, so this catches clicks in the preview when the
+	// input doesn't currently hold focus.
+	iframe.addEventListener('focus', () => {
+		sandbox.state.urlMenuOpen = false;
 	});
 }
 
