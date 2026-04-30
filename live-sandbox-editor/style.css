@@ -352,3 +352,10 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 .lse-setup .lse-setup-group li {
 	margin: 0;
 }
+
+.lse-setup .lse-setup-actions {
+	display: flex;
+	gap: 12px;
+	margin: 0 0 8px;
+	font-size: 12px;
+}

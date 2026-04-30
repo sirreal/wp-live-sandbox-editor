@@ -8,7 +8,10 @@ interface Item {
 	id: string;
 	label: string;
 	selected: boolean;
+	active: boolean;
 }
+
+type ItemGroup = 'plugins' | 'themes' | 'tables';
 
 interface SetupState {
 	loading: boolean;
@@ -25,6 +28,9 @@ interface SetupStore {
 	actions: {
 		toggleItem(): void;
 		toggleUploads(): void;
+		selectAll(): void;
+		deselectAll(): void;
+		selectActive(): void;
 		retry(): void;
 		run(): void;
 	};
@@ -55,6 +61,24 @@ const setup = store<SetupStore>('live-sandbox-editor/setup', {
 		toggleUploads(): void {
 			setup.state.uploads = !setup.state.uploads;
 		},
+		selectAll(): void {
+			const ctx = getContext<{ group: ItemGroup }>();
+			for (const item of setup.state[ctx.group]) {
+				item.selected = true;
+			}
+		},
+		deselectAll(): void {
+			const ctx = getContext<{ group: ItemGroup }>();
+			for (const item of setup.state[ctx.group]) {
+				item.selected = false;
+			}
+		},
+		selectActive(): void {
+			const ctx = getContext<{ group: ItemGroup }>();
+			for (const item of setup.state[ctx.group]) {
+				item.selected = item.active;
+			}
+		},
 		retry(): void {
 			void loadDefaults();
 		},
@@ -81,7 +105,10 @@ function buildItems(
 ): Item[] {
 	const activeSet = new Set(active);
 	return Object.entries(labels ?? {})
-		.map(([id, label]) => ({ id, label, selected: activeSet.has(id) }))
+		.map(([id, label]) => {
+			const isActive = activeSet.has(id);
+			return { id, label, selected: isActive, active: isActive };
+		})
 		.sort((a, b) =>
 			a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }),
 		);
@@ -105,6 +132,7 @@ async function loadDefaults(): Promise<void> {
 			id,
 			label: id,
 			selected: true,
+			active: true,
 		}));
 		setup.state.uploads = data.manifest.uploads;
 		setup.state.loading = false;

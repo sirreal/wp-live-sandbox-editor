@@ -30,8 +30,19 @@ namespace Live_Sandbox_Editor;
 	</div>
 
 	<div data-wp-class--lse-hidden="state.loading || state.loadError">
-		<fieldset class="lse-setup-group">
+		<fieldset class="lse-setup-group" data-wp-context='{"group":"plugins"}'>
 			<legend><?php esc_html_e( 'Plugins', 'live-sandbox-editor' ); ?></legend>
+			<div class="lse-setup-actions">
+				<button type="button" class="button-link" data-wp-on--click="actions.selectAll">
+					<?php esc_html_e( 'Select all', 'live-sandbox-editor' ); ?>
+				</button>
+				<button type="button" class="button-link" data-wp-on--click="actions.selectActive">
+					<?php esc_html_e( 'Select active', 'live-sandbox-editor' ); ?>
+				</button>
+				<button type="button" class="button-link" data-wp-on--click="actions.deselectAll">
+					<?php esc_html_e( 'Deselect all', 'live-sandbox-editor' ); ?>
+				</button>
+			</div>
 			<ul>
 				<template data-wp-each--item="state.plugins">
 					<li>
@@ -44,8 +55,19 @@ namespace Live_Sandbox_Editor;
 			</ul>
 		</fieldset>
 
-		<fieldset class="lse-setup-group">
+		<fieldset class="lse-setup-group" data-wp-context='{"group":"themes"}'>
 			<legend><?php esc_html_e( 'Themes', 'live-sandbox-editor' ); ?></legend>
+			<div class="lse-setup-actions">
+				<button type="button" class="button-link" data-wp-on--click="actions.selectAll">
+					<?php esc_html_e( 'Select all', 'live-sandbox-editor' ); ?>
+				</button>
+				<button type="button" class="button-link" data-wp-on--click="actions.selectActive">
+					<?php esc_html_e( 'Select active', 'live-sandbox-editor' ); ?>
+				</button>
+				<button type="button" class="button-link" data-wp-on--click="actions.deselectAll">
+					<?php esc_html_e( 'Deselect all', 'live-sandbox-editor' ); ?>
+				</button>
+			</div>
 			<ul>
 				<template data-wp-each--item="state.themes">
 					<li>
@@ -58,8 +80,16 @@ namespace Live_Sandbox_Editor;
 			</ul>
 		</fieldset>
 
-		<fieldset class="lse-setup-group">
+		<fieldset class="lse-setup-group" data-wp-context='{"group":"tables"}'>
 			<legend><?php esc_html_e( 'Tables', 'live-sandbox-editor' ); ?></legend>
+			<div class="lse-setup-actions">
+				<button type="button" class="button-link" data-wp-on--click="actions.selectAll">
+					<?php esc_html_e( 'Select all', 'live-sandbox-editor' ); ?>
+				</button>
+				<button type="button" class="button-link" data-wp-on--click="actions.deselectAll">
+					<?php esc_html_e( 'Deselect all', 'live-sandbox-editor' ); ?>
+				</button>
+			</div>
 			<ul>
 				<template data-wp-each--item="state.tables">
 					<li>
