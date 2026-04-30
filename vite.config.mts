@@ -17,6 +17,10 @@ export default defineConfig({
 		sourcemap: true,
 		rolldownOptions: {
 			input: 'src/main.ts',
+			// `@wordpress/interactivity` is provided at runtime by WordPress
+			// core as a script module; keep the bare specifier in the output
+			// so the host's import map resolves it instead of bundling it.
+			external: ['@wordpress/interactivity'],
 			output: {
 				entryFileNames: '[name].js',
 				chunkFileNames: '[name]-[hash].js',

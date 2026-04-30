@@ -85,7 +85,6 @@ export async function initPlayground(
 	onStatus('Finalizing sandbox…');
 	await applyPostImportFixups(client, hasDb ? manifestResp : null, onStatus);
 
-	await client.goTo('/wp-admin/');
 	return client;
 }
 
