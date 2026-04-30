@@ -69,28 +69,40 @@ export async function initApp(
 	let saveHandler: ((path: string, content: string) => Promise<void>) | null =
 		null;
 
-	let editorLoadPromise: Promise<EditorMod> | null = null;
-	function ensureEditorLoaded(): Promise<EditorMod> {
+	let editorLoadPromise: Promise<EditorMod | null> | null = null;
+	function ensureEditorLoaded(): Promise<EditorMod | null> {
 		if (!editorLoadPromise) {
 			editorLoadPromise = (async () => {
-				// editor.js side-effect-imports monaco-environment.js, so
-				// MonacoEnvironment is registered before monaco.editor.create().
-				const mod = await import('./editor.js');
-				mod.initEditor(monacoContainer);
-				// Always register the save command. The wrapper resolves
-				// `saveHandler` at Cmd-S press time, so initialising the
-				// editor before `saveHandler` is assigned (toggle clicked
-				// during the gap between `state.isReady` flipping and
-				// `boot()` resolving) is safe — Cmd-S no-ops until the
-				// handler lands instead of permanently losing the binding.
-				mod.addSaveCommand((path, content) => {
-					saveHandler?.(path, content);
-				});
-				// Belt-and-suspenders: Monaco's automaticLayout ResizeObserver
-				// can lag a frame on first reveal of a previously-hidden
-				// container; force a sync layout against real dims.
-				requestAnimationFrame(() => mod.getEditor()?.layout());
-				return mod;
+				try {
+					// editor.js side-effect-imports monaco-environment.js, so
+					// MonacoEnvironment is registered before monaco.editor.create().
+					const mod = await import('./editor.js');
+					mod.initEditor(monacoContainer);
+					// Always register the save command. The wrapper resolves
+					// `saveHandler` at Cmd-S press time, so initialising the
+					// editor before `saveHandler` is assigned (toggle clicked
+					// during the gap between `state.isReady` flipping and
+					// `boot()` resolving) is safe — Cmd-S no-ops until the
+					// handler lands instead of permanently losing the binding.
+					mod.addSaveCommand((path, content) => {
+						saveHandler?.(path, content);
+					});
+					// Belt-and-suspenders: Monaco's automaticLayout ResizeObserver
+					// can lag a frame on first reveal of a previously-hidden
+					// container; force a sync layout against real dims.
+					requestAnimationFrame(() => mod.getEditor()?.layout());
+					return mod;
+				} catch (err) {
+					// Stale chunk after a plugin update or a transient network
+					// blip will surface here; clear the cached promise so the
+					// user can retry by toggling again, fall back to closed,
+					// and surface the failure in the status bar.
+					console.error('[live-sandbox-editor] Editor load failed:', err);
+					editorLoadPromise = null;
+					sandbox.state.editorOpen = false;
+					sandbox.state.statusText = 'Failed to load editor.';
+					return null;
+				}
 			})();
 		}
 		return editorLoadPromise;
@@ -105,7 +117,11 @@ export async function initApp(
 			*onEditorOpenChange(): Generator<Promise<unknown>, void> {
 				if (sandbox.state.editorOpen) {
 					yield ensureEditorLoaded();
-					fileTreeBody.focus();
+					// Re-check: ensureEditorLoaded flips editorOpen back to
+					// false on failure, which schedules another tick of this
+					// callback (the close branch). Skip focus here so the
+					// fallback tick can manage focus instead.
+					if (sandbox.state.editorOpen) fileTreeBody.focus();
 				} else {
 					// Clear inline widths set by the drag handle: their
 					// `width:Npx` would otherwise pin the preview pane to its
@@ -143,6 +159,10 @@ export async function initApp(
 
 	initFileExplorer(fileTreeBody, client, wpContentPath, async (filePath) => {
 		const mod = await ensureEditorLoaded();
+		// File-tree clicks should be unreachable when the editor isn't loaded
+		// (the tree lives inside the hidden editor pane), but if a load failure
+		// raced an in-flight click, just bail.
+		if (!mod) return;
 		const existingTab = openTabs.find((t) => t.path === filePath);
 		const label = filePath.split('/').pop() ?? filePath;
 
