@@ -99,10 +99,7 @@ async function loadDefaults(): Promise<void> {
 			throw new Error(`sync-manifest failed: ${res.status}`);
 		}
 		const data = (await res.json()) as ManifestResponse;
-		setup.state.plugins = buildItems(
-			data.pluginLabels,
-			data.manifest.plugins,
-		);
+		setup.state.plugins = buildItems(data.pluginLabels, data.manifest.plugins);
 		setup.state.themes = buildItems(data.themeLabels, data.manifest.themes);
 		setup.state.tables = data.manifest.tables.map((id) => ({
 			id,
