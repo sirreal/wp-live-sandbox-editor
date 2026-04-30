@@ -58,6 +58,7 @@ export async function initApp(
 
 	function closeTab(path: string, mod: EditorMod): void {
 		const idx = openTabs.findIndex((t) => t.path === path);
+		if (idx === -1) return;
 		openTabs.splice(idx, 1);
 		if (activeTab === path) {
 			activeTab = openTabs[idx]?.path ?? openTabs[idx - 1]?.path ?? null;
