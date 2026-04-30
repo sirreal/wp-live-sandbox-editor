@@ -77,7 +77,15 @@ export async function initApp(
 				// MonacoEnvironment is registered before monaco.editor.create().
 				const mod = await import('./editor.js');
 				mod.initEditor(monacoContainer);
-				if (saveHandler) mod.addSaveCommand(saveHandler);
+				// Always register the save command. The wrapper resolves
+				// `saveHandler` at Cmd-S press time, so initialising the
+				// editor before `saveHandler` is assigned (toggle clicked
+				// during the gap between `state.isReady` flipping and
+				// `boot()` resolving) is safe — Cmd-S no-ops until the
+				// handler lands instead of permanently losing the binding.
+				mod.addSaveCommand((path, content) => {
+					saveHandler?.(path, content);
+				});
 				// Belt-and-suspenders: Monaco's automaticLayout ResizeObserver
 				// can lag a frame on first reveal of a previously-hidden
 				// container; force a sync layout against real dims.
@@ -117,10 +125,6 @@ export async function initApp(
 	const client = await sandbox.actions.boot(iframe, manifestOverride);
 	if (!client) return;
 
-	// Assign saveHandler before any further awaits — closes a window where
-	// a toggle click between boot resolving and saveHandler being set could
-	// run ensureEditorLoaded with a null saveHandler and leave Cmd-S
-	// unregistered.
 	saveHandler = async (path, content) => {
 		await writeFile(client, path, content);
 		const currentUrl = await client.getCurrentURL();
