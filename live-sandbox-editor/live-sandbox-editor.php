@@ -281,12 +281,8 @@ function rest_sync_manifest( WP_REST_Request $request ): array {
 		'uploadsUrl' => $uploads_url,
 	);
 
-	// Available items + display labels are only used by the Setup view.
-	// Computing them requires walking every installed plugin via
-	// `get_plugins()`, so callers opt in with `?labels=1` to keep the
-	// run-page boot cheap. The label maps double as the universe of
-	// available items for the Setup checkbox lists; the `manifest` field
-	// continues to mean "active by default".
+	// Setup-only: walking every installed plugin/theme is opt-in via
+	// `?labels=1` so the run-page boot stays cheap.
 	if ( ! $request->get_param( 'labels' ) ) {
 		return $response;
 	}
@@ -304,9 +300,8 @@ function rest_sync_manifest( WP_REST_Request $request ): array {
 
 	$theme_labels = array();
 	foreach ( wp_get_themes() as $slug => $theme ) {
-		$slug                  = (string) $slug;
-		$name                  = (string) $theme->get( 'Name' );
-		$theme_labels[ $slug ] = '' !== $name ? $name : $slug;
+		$name                          = (string) $theme->get( 'Name' );
+		$theme_labels[ (string) $slug ] = '' !== $name ? $name : (string) $slug;
 	}
 
 	$response['pluginLabels'] = $plugin_labels;
