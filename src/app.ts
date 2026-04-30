@@ -18,8 +18,13 @@ export async function initApp(
 	const editorPane = mustQuery(root, '.lse-editor-pane');
 	const previewPane = mustQuery(root, '.lse-preview-pane');
 	const iframe = mustQuery(root, '#lse-preview-iframe') as HTMLIFrameElement;
+	const urlFormGroup = mustQuery(root, '.lse-url-form-group');
+	const urlInput = mustQuery(root, '.lse-url-input') as HTMLInputElement;
+	const urlMenu = mustQuery(root, '#lse-url-menu');
 
 	initDragHandle(dragHandle, editorPane, previewPane);
+	initUrlMenuDismiss(urlFormGroup, iframe);
+	initUrlMenuKeyboard(urlInput, urlMenu);
 
 	const openTabs: OpenFile[] = [];
 	let activeTab: string | null = null;
@@ -193,6 +198,108 @@ function mustQuery(root: HTMLElement, selector: string): HTMLElement {
 		throw new Error(`[live-sandbox-editor] Missing element ${selector}`);
 	}
 	return found;
+}
+
+function initUrlMenuDismiss(
+	urlFormGroup: HTMLElement,
+	iframe: HTMLIFrameElement,
+): void {
+	// Keep the URL input focused when a menu item is activated. Without this,
+	// pressing on the button steals focus and fires `focusout` on the input
+	// (closing the menu before `click` arrives). preventDefault on
+	// `pointerdown` blocks the focus shift but leaves the click intact, and
+	// covers mouse, touch, and pen consistently.
+	urlFormGroup.addEventListener('pointerdown', (e) => {
+		const target = e.target;
+		if (target instanceof Element && target.closest('.lse-url-menu-item')) {
+			e.preventDefault();
+		}
+	});
+	// Close on focus moving outside the form group. relatedTarget is null
+	// when focus moves into a cross-origin iframe (the preview), so that
+	// case is covered too.
+	urlFormGroup.addEventListener('focusout', (e) => {
+		if (!sandbox.state.urlMenuOpen) return;
+		const next = e.relatedTarget;
+		if (next instanceof Node && urlFormGroup.contains(next)) return;
+		sandbox.state.urlMenuOpen = false;
+	});
+	// Belt-and-suspenders: focusout already covers most outside-click and
+	// iframe-focus paths, but a click on a non-focusable element outside the
+	// form group leaves the input focused — this catches that.
+	document.addEventListener('pointerdown', (e) => {
+		if (!sandbox.state.urlMenuOpen) return;
+		const target = e.target;
+		if (target instanceof Node && urlFormGroup.contains(target)) return;
+		sandbox.state.urlMenuOpen = false;
+	});
+	document.addEventListener('keydown', (e) => {
+		if (e.key === 'Escape' && sandbox.state.urlMenuOpen) {
+			sandbox.state.urlMenuOpen = false;
+		}
+	});
+	// Pointer events inside the cross-origin preview iframe don't bubble to
+	// the parent document, so this catches clicks in the preview when the
+	// input doesn't currently hold focus.
+	iframe.addEventListener('focus', () => {
+		sandbox.state.urlMenuOpen = false;
+	});
+}
+
+function initUrlMenuKeyboard(input: HTMLInputElement, menu: HTMLElement): void {
+	const items = (): HTMLButtonElement[] =>
+		Array.from(menu.querySelectorAll<HTMLButtonElement>('.lse-url-menu-item'));
+
+	input.addEventListener('keydown', (e) => {
+		if (e.key !== 'ArrowDown') return;
+		e.preventDefault();
+		const wasOpen = sandbox.state.urlMenuOpen;
+		sandbox.state.urlMenuOpen = true;
+		// `hidden` removal is applied async by the Interactivity API's signal
+		// flush (microtask). A hidden element can't receive focus, so wait
+		// one tick when opening from a closed state.
+		if (wasOpen) {
+			items()[0]?.focus();
+		} else {
+			queueMicrotask(() => items()[0]?.focus());
+		}
+	});
+
+	menu.addEventListener('keydown', (e) => {
+		const target = e.target;
+		if (
+			!(target instanceof HTMLElement) ||
+			!target.classList.contains('lse-url-menu-item')
+		) {
+			return;
+		}
+		const list = items();
+		const idx = list.indexOf(target as HTMLButtonElement);
+		switch (e.key) {
+			case 'ArrowDown':
+				e.preventDefault();
+				list[(idx + 1) % list.length]?.focus();
+				break;
+			case 'ArrowUp':
+				e.preventDefault();
+				if (idx === 0) input.focus();
+				else list[idx - 1]?.focus();
+				break;
+			case 'Home':
+				e.preventDefault();
+				list[0]?.focus();
+				break;
+			case 'End':
+				e.preventDefault();
+				list[list.length - 1]?.focus();
+				break;
+			case 'Escape':
+				// Document-level Escape handler closes the menu; refocus the
+				// input here so the user can keep typing without re-clicking.
+				input.focus();
+				break;
+		}
+	});
 }
 
 function initDragHandle(

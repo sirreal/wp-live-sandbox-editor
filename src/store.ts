@@ -1,4 +1,4 @@
-import { store } from '@wordpress/interactivity';
+import { getContext, store } from '@wordpress/interactivity';
 import type { PlaygroundClient } from '@wp-playground/client';
 import { initPlayground, type SyncManifest } from './playground.js';
 import { getAppData } from './types.js';
@@ -8,6 +8,7 @@ export interface SandboxState {
 	statusText: string;
 	isReady: boolean;
 	editorOpen: boolean;
+	urlMenuOpen: boolean;
 	readonly notReady: boolean;
 }
 
@@ -18,6 +19,8 @@ interface SandboxStore {
 		navigate(event: Event): Generator<Promise<unknown>, void>;
 		refresh(): Generator<Promise<unknown>, void>;
 		toggleEditor(): void;
+		openUrlMenu(): void;
+		quickNavigate(): Generator<Promise<unknown>, void>;
 		boot(
 			iframe: HTMLIFrameElement,
 			manifestOverride?: SyncManifest,
@@ -26,6 +29,11 @@ interface SandboxStore {
 }
 
 let client: PlaygroundClient | null = null;
+
+// Set by quickNavigate when it programmatically refocuses the URL input
+// after a keyboard activation; consumed by openUrlMenu so the resulting
+// focus event doesn't immediately reopen the menu we just closed.
+let suppressNextOpen = false;
 
 // Primitive initial values are authoritative in PHP via
 // `wp_interactivity_state` (see live-sandbox-editor/live-sandbox-editor.php).
@@ -45,6 +53,7 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 		},
 		*navigate(event: Event): Generator<Promise<unknown>, void> {
 			event.preventDefault();
+			sandbox.state.urlMenuOpen = false;
 			if (!client) return;
 			yield client.goTo(sandbox.state.url);
 		},
@@ -55,6 +64,30 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 		},
 		toggleEditor(): void {
 			sandbox.state.editorOpen = !sandbox.state.editorOpen;
+		},
+		openUrlMenu(): void {
+			if (suppressNextOpen) {
+				suppressNextOpen = false;
+				return;
+			}
+			sandbox.state.urlMenuOpen = true;
+		},
+		*quickNavigate(): Generator<Promise<unknown>, void> {
+			const { path } = getContext<{ path: string }>();
+			sandbox.state.urlMenuOpen = false;
+			sandbox.state.url = path;
+			// Keyboard activation (Enter/Space) leaves focus on the menu
+			// button that the bound `hidden` then makes invisible — focus
+			// would fall back to body. Move it to the URL input so the user
+			// can keep typing. The suppress flag stops the focus event from
+			// reopening the menu.
+			const input = document.querySelector<HTMLInputElement>('.lse-url-input');
+			if (input && document.activeElement !== input) {
+				suppressNextOpen = true;
+				input.focus();
+			}
+			if (!client) return;
+			yield client.goTo(path);
 		},
 		*boot(
 			iframe: HTMLIFrameElement,
