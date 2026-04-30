@@ -86,7 +86,10 @@ export async function initApp(
 					// `boot()` resolving) is safe — Cmd-S no-ops until the
 					// handler lands instead of permanently losing the binding.
 					mod.addSaveCommand((path, content) => {
-						saveHandler?.(path, content);
+						saveHandler?.(path, content)?.catch((err) => {
+							console.error('[live-sandbox-editor] Save failed:', err);
+							sandbox.state.statusText = 'Save failed.';
+						});
 					});
 					// Belt-and-suspenders: Monaco's automaticLayout ResizeObserver
 					// can lag a frame on first reveal of a previously-hidden
