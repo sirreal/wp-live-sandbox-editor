@@ -39,6 +39,13 @@ class Wpdb_Pdo_Statement {
 	 * run through wpdb. Calling `wpdb::prepare()` here would re-escape the
 	 * already-quoted values and reprocess `%` characters.
 	 *
+	 * Mutates the shared `$GLOBALS['wpdb']`: clears `last_error` before the
+	 * query and calls `flush()` after, so unrelated request-scope consumers
+	 * (debug bars, `shutdown` callbacks) will see those fields reset.
+	 * Note: under `SAVEQUERIES` (dev/staging only), `wpdb::flush()` does
+	 * NOT clear `$wpdb->queries`, so a long dump will still grow that
+	 * array. Production has `SAVEQUERIES` off; no action needed there.
+	 *
 	 * @param array<int|string,mixed>|null $params Positional or named params.
 	 * @throws \PDOException If wpdb reports an error or the query fails.
 	 */
@@ -81,14 +88,27 @@ class Wpdb_Pdo_Statement {
 	 * Emits the result into one freshly built buffer so the source SQL is
 	 * walked exactly once and no intermediate copies are made.
 	 *
-	 * @param array<int|string,mixed> $params Positional and/or named params.
+	 * Supported SQL subset (matches what `MySQLDumpProducer` emits):
+	 *   - `'…'` and `"…"` string literals are tracked as opaque regions.
+	 *   - `` `…` `` backtick-quoted identifiers are tracked as opaque
+	 *     regions, so a `?` inside `` `weird?col` `` does not consume a
+	 *     positional param.
+	 *   - Positional `?` substituted in document order; named `:name`
+	 *     substituted via longest-key-first match.
+	 *   - Escaped quotes (`\'`, `''`, `""`) inside literals and SQL
+	 *     comments (`--`, `#`, `/* … *\/`) are NOT modeled — the
+	 *     producer does not emit them in prepared statements.
+	 *
+	 * @param array<int|string,mixed> $params Positional (0-based) and/or
+	 *                                        named params.
 	 */
 	private function substitute_placeholders( string $sql, array $params ): string {
-		$out       = '';
-		$len       = strlen( $sql );
-		$in_single = false;
-		$in_double = false;
-		$pos_idx   = 0;
+		$out         = '';
+		$len         = strlen( $sql );
+		$in_single   = false;
+		$in_double   = false;
+		$in_backtick = false;
+		$pos_idx     = 0;
 		// Sort named keys longest-first so `:id` cannot eat `:id2`.
 		$named = array();
 		foreach ( $params as $key => $value ) {
@@ -120,6 +140,13 @@ class Wpdb_Pdo_Statement {
 				}
 				continue;
 			}
+			if ( $in_backtick ) {
+				$out .= $ch;
+				if ( '`' === $ch ) {
+					$in_backtick = false;
+				}
+				continue;
+			}
 			if ( "'" === $ch ) {
 				$in_single = true;
 				$out      .= $ch;
@@ -128,6 +155,11 @@ class Wpdb_Pdo_Statement {
 			if ( '"' === $ch ) {
 				$in_double = true;
 				$out      .= $ch;
+				continue;
+			}
+			if ( '`' === $ch ) {
+				$in_backtick = true;
+				$out        .= $ch;
 				continue;
 			}
 			if ( '?' === $ch ) {
@@ -183,7 +215,10 @@ class Wpdb_Pdo_Statement {
 	}
 
 	/**
-	 * @param int|string $parameter Positional index or `:name`.
+	 * @param int|string $parameter 1-based positional index (per PDO) or
+	 *                              `:name`. Stored at `$parameter - 1` for
+	 *                              integer keys so `execute()`'s 0-based
+	 *                              positional walk lands on the same value.
 	 * @param mixed      $value     Value to bind.
 	 * @param int        $type      PDO param type — ignored: `quote()` infers
 	 *                              from the PHP type and the producer never
@@ -193,7 +228,8 @@ class Wpdb_Pdo_Statement {
 		if ( null === $this->bound_params ) {
 			$this->bound_params = array();
 		}
-		$this->bound_params[ $parameter ] = $value;
+		$key = is_int( $parameter ) ? $parameter - 1 : $parameter;
+		$this->bound_params[ $key ] = $value;
 		return true;
 	}
 
