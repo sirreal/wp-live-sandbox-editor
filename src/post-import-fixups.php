@@ -300,6 +300,66 @@ if ( ! function_exists( 'lse_existing_tables' ) ) {
 	}
 }
 
+if ( ! function_exists( 'lse_reconcile_with_filesystem' ) ) {
+	/**
+	 * Drop `active_plugins` entries and switch the active theme when the
+	 * referenced files weren't synced. Otherwise WP boots referencing
+	 * directories that don't exist and emits load errors / 500s.
+	 *
+	 * Driven off the actual sandbox filesystem rather than the original
+	 * manifest, so it's also correct if the sync was partial or the user
+	 * imported a wp_options dump from a different host.
+	 */
+	function lse_reconcile_with_filesystem(): void {
+		$active   = (array) get_option( 'active_plugins', array() );
+		$filtered = array_values(
+			array_filter(
+				$active,
+				static fn( $entry ) => is_string( $entry ) && '' !== $entry && file_exists( WP_PLUGIN_DIR . '/' . $entry )
+			)
+		);
+		if ( $filtered !== $active ) {
+			update_option( 'active_plugins', $filtered );
+		}
+
+		if ( is_multisite() ) {
+			$sitewide = (array) get_site_option( 'active_sitewide_plugins', array() );
+			$kept     = array_filter(
+				$sitewide,
+				static fn( $entry ) => file_exists( WP_PLUGIN_DIR . '/' . $entry ),
+				ARRAY_FILTER_USE_KEY
+			);
+			if ( $kept !== $sitewide ) {
+				update_site_option( 'active_sitewide_plugins', $kept );
+			}
+		}
+
+		$stylesheet    = (string) get_option( 'stylesheet' );
+		$template      = (string) get_option( 'template' );
+		$stylesheet_ok = '' !== $stylesheet && wp_get_theme( $stylesheet )->exists();
+		$template_ok   = '' !== $template && wp_get_theme( $template )->exists();
+		if ( $stylesheet_ok && $template_ok ) {
+			return;
+		}
+		// Fall back to any installed theme — Playground always ships at
+		// least the current core default. `array_keys` is fine here:
+		// `wp_get_themes()` only returns themes whose stylesheets exist.
+		$installed = wp_get_themes( array( 'errors' => null ) );
+		$fallback  = null;
+		foreach ( $installed as $slug => $theme ) {
+			if ( $theme->exists() ) {
+				$fallback = array( $slug, $theme->get_template() );
+				break;
+			}
+		}
+		if ( null === $fallback ) {
+			return;
+		}
+		update_option( 'stylesheet', $fallback[0] );
+		update_option( 'template', $fallback[1] );
+	}
+}
+
 if ( ! function_exists( 'lse_deactivate_self' ) ) {
 	/**
 	 * Match by main-file postfix — the WP plugin dir name isn't stable

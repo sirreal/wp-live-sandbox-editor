@@ -20,8 +20,9 @@ use FileTreeProducer;
 use WP_REST_Request;
 use WordPress\DataLiberation\MySQLDumpProducer;
 
-const SLUG    = 'live-sandbox-editor';
-const VERSION = '0.1';
+const SLUG       = 'live-sandbox-editor';
+const SETUP_SLUG = 'live-sandbox-editor-setup';
+const VERSION    = '0.1';
 
 require_once __DIR__ . '/inc/sync-stream.php';
 require_once __DIR__ . '/inc/manifest.php';
@@ -65,7 +66,28 @@ function init(): void {
  * @param string $hook_suffix Current hook suffix.
  */
 function enqueue_assets( string $hook_suffix ): void {
-	if ( $hook_suffix !== 'toplevel_page_' . SLUG ) {
+	$page = page_for_screen( $hook_suffix );
+	if ( null === $page ) {
+		return;
+	}
+
+	$module_id = 'setup' === $page ? SETUP_SLUG : SLUG;
+	add_filter( 'script_module_data_' . $module_id, __NAMESPACE__ . '\\app_data' );
+
+	wp_enqueue_style(
+		SLUG,
+		plugins_url( 'style.css', __FILE__ ),
+		array(),
+		asset_version( 'style.css' )
+	);
+
+	if ( 'setup' === $page ) {
+		wp_enqueue_script_module(
+			SETUP_SLUG,
+			plugins_url( 'build/setup.js', __FILE__ ),
+			array( '@wordpress/interactivity' ),
+			asset_version( 'build/setup.js' )
+		);
 		return;
 	}
 
@@ -74,31 +96,6 @@ function enqueue_assets( string $hook_suffix ): void {
 		plugins_url( 'build/main.js', __FILE__ ),
 		array( '@wordpress/interactivity' ),
 		asset_version( 'build/main.js' )
-	);
-
-	add_filter(
-		'script_module_data_' . SLUG,
-		function (): array {
-			/**
-			 * Sync type with AppData TS interface.
-			 *
-			 * @phpstan-var array{
-			 *                   restUrl: string;
-			 *                   nonce: string;
-			 *                   siteUrl: string;
-			 *                   scriptDebug: bool;
-			 *                   wpDebug: bool;
-			 *                 }
-			 */
-			$app_data = array(
-				'restUrl'     => rest_url( SLUG . '/v1' ),
-				'nonce'       => wp_create_nonce( 'wp_rest' ),
-				'siteUrl'     => get_site_url(),
-				'scriptDebug' => defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG,
-				'wpDebug'     => defined( 'WP_DEBUG' ) && WP_DEBUG,
-			);
-			return $app_data;
-		}
 	);
 
 	// Authoritative initial state. JS store ({@see src/store.ts}) only
@@ -113,16 +110,50 @@ function enqueue_assets( string $hook_suffix ): void {
 	);
 
 	wp_enqueue_style(
-		SLUG,
-		plugins_url( 'style.css', __FILE__ ),
-		array(),
-		asset_version( 'style.css' )
-	);
-	wp_enqueue_style(
 		SLUG . '-monaco',
 		plugins_url( 'build/monaco.css', __FILE__ ),
 		array(),
 		asset_version( 'build/monaco.css' )
+	);
+}
+
+/**
+ * Classify a screen ID or admin-enqueue hook suffix into our two pages.
+ *
+ * Submenu hooks are prefixed with `sanitize_title( $parent_menu_title )`,
+ * not the parent slug. With menu title "Live Sandbox Editor" that resolves
+ * to SLUG, so the run page's hook is `SLUG . '_page_' . SLUG`.
+ *
+ * @param string $hook_or_screen_id Screen ID or admin_enqueue_scripts hook suffix.
+ * @return string|null 'setup', 'run', or null if not one of ours.
+ */
+function page_for_screen( string $hook_or_screen_id ): ?string {
+	if ( 'toplevel_page_' . SETUP_SLUG === $hook_or_screen_id ) {
+		return 'setup';
+	}
+	if ( SLUG . '_page_' . SLUG === $hook_or_screen_id ) {
+		return 'run';
+	}
+	return null;
+}
+
+/**
+ * Script-module data shared by both pages. Sync type with AppData TS interface.
+ *
+ * @param array<string,mixed> $data Existing filtered data.
+ * @return array<string,mixed>
+ */
+function app_data( array $data ): array {
+	return array_merge(
+		$data,
+		array(
+			'restUrl'     => rest_url( SLUG . '/v1' ),
+			'nonce'       => wp_create_nonce( 'wp_rest' ),
+			'siteUrl'     => get_site_url(),
+			'runUrl'      => menu_page_url( SLUG, false ),
+			'scriptDebug' => defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG,
+			'wpDebug'     => defined( 'WP_DEBUG' ) && WP_DEBUG,
+		)
 	);
 }
 
@@ -140,26 +171,49 @@ function asset_version( string $relative_path ): string {
 	return VERSION;
 }
 
-/** Register the admin menu page. */
+/** Register the admin menu pages. */
 function register_menu(): void {
 	add_menu_page(
 		'Live Sandbox Editor',
 		'Live Sandbox Editor',
 		'manage_options',
+		SETUP_SLUG,
+		__NAMESPACE__ . '\\render_setup_page'
+	);
+	// Override the auto-mirror submenu so the entry reads "Setup" instead of
+	// the parent menu's title.
+	add_submenu_page(
+		SETUP_SLUG,
+		'Setup',
+		'Setup',
+		'manage_options',
+		SETUP_SLUG,
+		__NAMESPACE__ . '\\render_setup_page'
+	);
+	add_submenu_page(
+		SETUP_SLUG,
+		'Live Sandbox Editor',
+		'Run',
+		'manage_options',
 		SLUG,
-		__NAMESPACE__ . '\\render_page'
+		__NAMESPACE__ . '\\render_run_page'
 	);
 }
 
-/** Render the admin page. */
-function render_page(): void {
+/** Render the setup admin page. */
+function render_setup_page(): void {
+	require __DIR__ . '/templates/setup-view.php';
+}
+
+/** Render the run admin page. */
+function render_run_page(): void {
 	require __DIR__ . '/templates/sandbox-view.php';
 }
 
 /** Show a notice when the vendored Reprint classes are unavailable. */
 function reprint_notice(): void {
 	$screen = get_current_screen();
-	if ( ! $screen || $screen->id !== 'toplevel_page_' . SLUG ) {
+	if ( ! $screen || null === page_for_screen( $screen->id ) ) {
 		return;
 	}
 	maybe_load_reprint();
@@ -216,14 +270,44 @@ function register_rest_routes(): void {
  * @param  WP_REST_Request $request Request.
  * @return array
  */
-function rest_sync_manifest( WP_REST_Request $request ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+function rest_sync_manifest( WP_REST_Request $request ): array {
 	$uploads     = wp_upload_dir( null, false );
 	$uploads_url = is_array( $uploads ) && ! empty( $uploads['baseurl'] ) ? (string) $uploads['baseurl'] : '';
-	return array(
-		'manifest'   => Manifest\defaults(),
+	$manifest    = Manifest\defaults();
+
+	$response = array(
+		'manifest'   => $manifest,
 		'siteUrl'    => (string) get_site_url(),
 		'uploadsUrl' => $uploads_url,
 	);
+
+	// Display labels are only used by the Setup view. Computing them
+	// requires walking every installed plugin via `get_plugins()`, so
+	// callers opt in with `?labels=1` to keep the run-page boot cheap.
+	if ( ! $request->get_param( 'labels' ) ) {
+		return $response;
+	}
+
+	// `get_plugins()` is admin-only and not autoloaded for REST callbacks.
+	require_once ABSPATH . 'wp-admin/includes/plugin.php';
+	$all_plugins   = get_plugins();
+	$plugin_labels = array();
+	foreach ( $manifest['plugins'] as $entry ) {
+		$plugin_labels[ $entry ] = isset( $all_plugins[ $entry ]['Name'] )
+			? (string) $all_plugins[ $entry ]['Name']
+			: $entry;
+	}
+
+	$theme_labels = array();
+	foreach ( $manifest['themes'] as $slug ) {
+		$theme                 = wp_get_theme( $slug );
+		$name                  = $theme->exists() ? (string) $theme->get( 'Name' ) : $slug;
+		$theme_labels[ $slug ] = '' !== $name ? $name : $slug;
+	}
+
+	$response['pluginLabels'] = $plugin_labels;
+	$response['themeLabels']  = $theme_labels;
+	return $response;
 }
 
 /**

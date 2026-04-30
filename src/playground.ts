@@ -18,10 +18,12 @@ export interface SyncManifest {
 	uploads: boolean;
 }
 
-interface ManifestResponse {
+export interface ManifestResponse {
 	manifest: SyncManifest;
 	siteUrl: string;
 	uploadsUrl: string;
+	pluginLabels?: Record<string, string>;
+	themeLabels?: Record<string, string>;
 }
 
 async function getErrorResponseText(res: Response): Promise<string | null> {
@@ -37,6 +39,7 @@ export async function initPlayground(
 	iframe: HTMLIFrameElement,
 	onStatus: (status: string) => void,
 	debug: DebugSettings,
+	manifestOverride?: SyncManifest,
 ): Promise<PlaygroundClient> {
 	const debugMode = debug.scriptDebug || debug.wpDebug;
 	const { startPlaygroundWeb } = await import('@wp-playground/client');
@@ -57,13 +60,11 @@ export async function initPlayground(
 
 	onStatus('Resolving sync manifest…');
 	const manifestResp = await fetchManifest();
-	// Future PR: surface a UI for the user to override `manifest` before
-	// kicking off the sync. For now, defaults: active plugins, active
-	// theme + parent, structural WP tables, no uploads.
-	const manifest = manifestResp.manifest;
+	const manifest = manifestOverride ?? manifestResp.manifest;
+	const dbContext: ManifestResponse = { ...manifestResp, manifest };
 
 	if (debugMode) {
-		console.log('[live-sandbox-editor] manifest:', manifestResp);
+		console.log('[live-sandbox-editor] manifest:', manifest);
 	}
 
 	const hasFiles =
@@ -83,7 +84,7 @@ export async function initPlayground(
 	}
 
 	onStatus('Finalizing sandbox…');
-	await applyPostImportFixups(client, hasDb ? manifestResp : null, onStatus);
+	await applyPostImportFixups(client, hasDb ? dbContext : null, onStatus);
 
 	return client;
 }
@@ -430,11 +431,15 @@ async function applyPostImportFixups(
 
 	// Self-deactivate runs unconditionally — file sync excludes the editor
 	// from copy, but `active_plugins` in the imported DB may still carry it.
+	// Reconciliation runs only when a DB was imported: without one,
+	// Playground's bundled defaults are already self-consistent.
+	const reconcile = dbContext ? 'lse_reconcile_with_filesystem();' : '';
 	await client.run({
 		code: `<?php
 			require '${docroot}/wp-load.php';
 			require_once '${FIXUPS_PATH}';
 			lse_deactivate_self();
+			${reconcile}
 		`,
 	});
 }

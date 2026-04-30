@@ -16,7 +16,10 @@ export default defineConfig({
 		modulePreload: false,
 		sourcemap: true,
 		rolldownOptions: {
-			input: 'src/main.ts',
+			input: {
+				main: 'src/main.ts',
+				setup: 'src/setup.ts',
+			},
 			// `@wordpress/interactivity` is provided at runtime by WordPress
 			// core as a script module; keep the bare specifier in the output
 			// so the host's import map resolves it instead of bundling it.
