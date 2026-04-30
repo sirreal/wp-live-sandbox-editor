@@ -431,11 +431,15 @@ async function applyPostImportFixups(
 
 	// Self-deactivate runs unconditionally — file sync excludes the editor
 	// from copy, but `active_plugins` in the imported DB may still carry it.
+	// Reconciliation runs only when a DB was imported: without one,
+	// Playground's bundled defaults are already self-consistent.
+	const reconcile = dbContext ? 'lse_reconcile_with_filesystem();' : '';
 	await client.run({
 		code: `<?php
 			require '${docroot}/wp-load.php';
 			require_once '${FIXUPS_PATH}';
 			lse_deactivate_self();
+			${reconcile}
 		`,
 	});
 }
