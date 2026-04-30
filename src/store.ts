@@ -1,6 +1,6 @@
 import { store } from '@wordpress/interactivity';
 import type { PlaygroundClient } from '@wp-playground/client';
-import { initPlayground } from './playground.js';
+import { initPlayground, type SyncManifest } from './playground.js';
 import { getAppData } from './types.js';
 
 export interface SandboxState {
@@ -18,6 +18,7 @@ interface SandboxStore {
 		refresh(): Generator<Promise<unknown>, void>;
 		boot(
 			iframe: HTMLIFrameElement,
+			manifestOverride?: SyncManifest,
 		): Generator<Promise<unknown>, PlaygroundClient | null>;
 	};
 }
@@ -52,6 +53,7 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 		},
 		*boot(
 			iframe: HTMLIFrameElement,
+			manifestOverride?: SyncManifest,
 		): Generator<Promise<unknown>, PlaygroundClient | null> {
 			const { scriptDebug, wpDebug } = getAppData();
 			try {
@@ -61,6 +63,7 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 						sandbox.state.statusText = s;
 					},
 					{ scriptDebug, wpDebug },
+					manifestOverride,
 				)) as PlaygroundClient;
 			} catch (err) {
 				sandbox.state.statusText = 'Playground failed to initialize.';

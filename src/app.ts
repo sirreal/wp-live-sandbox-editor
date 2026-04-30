@@ -6,10 +6,14 @@ import {
 } from './editor.js';
 import { initFileExplorer } from './file-explorer.js';
 import { readFile, writeFile } from './filesystem.js';
+import type { SyncManifest } from './playground.js';
 import { sandbox } from './store.js';
 import type { OpenFile } from './types.js';
 
-export async function initApp(root: HTMLElement): Promise<void> {
+export async function initApp(
+	root: HTMLElement,
+	manifestOverride?: SyncManifest,
+): Promise<void> {
 	const tabStrip = mustQuery(root, '#lse-tabs');
 	const monacoContainer = mustQuery(root, '#lse-monaco');
 	const fileTreeBody = mustQuery(root, '#lse-file-tree-body');
@@ -66,7 +70,7 @@ export async function initApp(root: HTMLElement): Promise<void> {
 		renderTabs();
 	}
 
-	const client = await sandbox.actions.boot(iframe);
+	const client = await sandbox.actions.boot(iframe, manifestOverride);
 	if (!client) return;
 
 	const docroot = await client.documentRoot;
