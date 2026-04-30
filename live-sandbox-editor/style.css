@@ -4,28 +4,28 @@ html.wp-toolbar {
 	box-sizing: border-box;
 	height: 100%;
 }
-body.toplevel_page_live-sandbox-editor {
+body.live-sandbox-editor_page_live-sandbox-editor {
 	height: 100%;
 	margin: 0;
 	overflow: hidden;
 }
-body.toplevel_page_live-sandbox-editor #wpwrap {
+body.live-sandbox-editor_page_live-sandbox-editor #wpwrap {
 	height: 100%;
 	display: flex;
 	flex-direction: column;
 }
-body.toplevel_page_live-sandbox-editor #wpcontent {
+body.live-sandbox-editor_page_live-sandbox-editor #wpcontent {
 	flex: 1;
 	min-height: 0;
 	padding: 0;
 	display: flex;
 	flex-direction: column;
 }
-body.toplevel_page_live-sandbox-editor #wpbody {
+body.live-sandbox-editor_page_live-sandbox-editor #wpbody {
 	flex: 1;
 	min-height: 0;
 }
-body.toplevel_page_live-sandbox-editor #wpbody-content {
+body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 	height: 100%;
 	box-sizing: border-box;
 	float: none;
