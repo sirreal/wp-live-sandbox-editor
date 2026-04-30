@@ -72,6 +72,7 @@ $quick_links = array(
 					data-wp-bind--aria-expanded="state.urlMenuOpen"
 					data-wp-on--input="actions.setUrl"
 					data-wp-on--focus="actions.openUrlMenu"
+					data-wp-on--click="actions.openUrlMenu"
 					aria-label="URL to visit in the playground"
 					aria-haspopup="menu"
 					aria-controls="lse-url-menu"
