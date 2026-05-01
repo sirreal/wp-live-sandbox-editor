@@ -13,11 +13,13 @@ export interface SandboxState {
 	editorOpen: boolean;
 	urlMenuOpen: boolean;
 	themeMode: ThemeMode;
+	prefersDark: boolean;
 	readonly notReady: boolean;
 	readonly effectiveTheme: EffectiveTheme;
 	readonly themeIsAuto: boolean;
 	readonly themeIsLight: boolean;
 	readonly themeIsDark: boolean;
+	readonly isLightTheme: boolean;
 }
 
 interface SandboxStore {
@@ -88,6 +90,7 @@ let suppressNextOpen = false;
 export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 	state: {
 		themeMode: readStoredThemeMode(),
+		prefersDark: !!darkMediaQuery?.matches,
 		get notReady(): boolean {
 			return !sandbox.state.isReady;
 		},
@@ -95,7 +98,7 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 			const mode = sandbox.state.themeMode;
 			if (mode === 'light') return 'vs';
 			if (mode === 'dark') return 'vs-dark';
-			return darkMediaQuery?.matches ? 'vs-dark' : 'vs';
+			return sandbox.state.prefersDark ? 'vs-dark' : 'vs';
 		},
 		get themeIsAuto(): boolean {
 			return sandbox.state.themeMode === 'auto';
@@ -105,6 +108,9 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 		},
 		get themeIsDark(): boolean {
 			return sandbox.state.themeMode === 'dark';
+		},
+		get isLightTheme(): boolean {
+			return sandbox.state.effectiveTheme === 'vs';
 		},
 	},
 	actions: {
@@ -204,6 +210,7 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 // Live-follow OS appearance only when the user has chosen 'auto'. In manual
 // modes the listener fires but the effective theme doesn't change, so the
 // editor stays put.
-darkMediaQuery?.addEventListener('change', () => {
+darkMediaQuery?.addEventListener('change', (event) => {
+	sandbox.state.prefersDark = event.matches;
 	if (sandbox.state.themeMode === 'auto') applyMonacoTheme();
 });
