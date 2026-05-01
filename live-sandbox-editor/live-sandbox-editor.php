@@ -27,6 +27,7 @@ const VERSION    = '0.1';
 require_once __DIR__ . '/inc/sync-stream.php';
 require_once __DIR__ . '/inc/manifest.php';
 require_once __DIR__ . '/inc/class-wpdb-pdo-adapter.php';
+require_once __DIR__ . '/inc/test-upgrade.php';
 
 /**
  * Load vendored Reprint classes only if they are not already defined.
@@ -59,6 +60,7 @@ function init(): void {
 	add_action( 'admin_enqueue_scripts', __NAMESPACE__ . '\\enqueue_assets' );
 	add_action( 'admin_menu', __NAMESPACE__ . '\\register_menu' );
 	add_action( 'admin_notices', __NAMESPACE__ . '\\reprint_notice' );
+	Test_Upgrade\init();
 }
 
 /**
