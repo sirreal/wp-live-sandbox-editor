@@ -47,7 +47,7 @@ function register_update_message_hooks(): void {
  */
 function render_link( string $entry ): void {
 	$run_url = menu_page_url( Live_Sandbox_Editor\SLUG, false );
-	$href    = add_query_arg( 'testUpgrade', rawurlencode( $entry ), $run_url );
+	$href    = add_query_arg( 'testUpgrade', $entry, $run_url );
 	$label   = __( 'Test upgrade in sandbox', 'live-sandbox-editor' );
 
 	printf(
