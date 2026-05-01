@@ -80,11 +80,11 @@ let client: PlaygroundClient | null = null;
 // focus event doesn't immediately reopen the menu we just closed.
 let suppressNextOpen = false;
 
-// Primitive initial values are authoritative in PHP via
+// Most primitive initial values are authoritative in PHP via
 // `wp_interactivity_state` (see live-sandbox-editor/live-sandbox-editor.php).
-// Only the derived `notReady` getter is declared here; the rest of the shape
-// is supplied by the `SandboxStore` generic and merged from server state at
-// hydration.
+// Exception: `themeMode` is user-specific (localStorage), so the server can't
+// know it — initialised here from `readStoredThemeMode()`. Derived getters
+// (`notReady`, `effectiveTheme`, `themeIs*`) are declared inline below.
 export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 	state: {
 		themeMode: readStoredThemeMode(),
