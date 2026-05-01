@@ -14,6 +14,24 @@ namespace Live_Sandbox_Editor;
 
 \defined( 'ABSPATH' ) || exit;
 
+$theme_options = array(
+	array(
+		'value'    => 'auto',
+		'label'    => __( 'Auto', 'live-sandbox-editor' ),
+		'is_state' => 'state.themeIsAuto',
+	),
+	array(
+		'value'    => 'light',
+		'label'    => __( 'Light', 'live-sandbox-editor' ),
+		'is_state' => 'state.themeIsLight',
+	),
+	array(
+		'value'    => 'dark',
+		'label'    => __( 'Dark', 'live-sandbox-editor' ),
+		'is_state' => 'state.themeIsDark',
+	),
+);
+
 $quick_links = array(
 	array(
 		'label' => __( 'Homepage', 'live-sandbox-editor' ),
@@ -42,7 +60,7 @@ $quick_links = array(
 );
 
 ?>
-<div id="live-sandbox-editor-root" data-wp-interactive="live-sandbox-editor/sandbox">
+<div id="live-sandbox-editor-root" data-wp-interactive="live-sandbox-editor/sandbox" data-wp-class--lse-theme-light="state.isLightTheme">
 	<div class="lse-toolbar">
 		<button
 			type="button"
@@ -114,6 +132,25 @@ $quick_links = array(
 				<div id="lse-file-tree-body" class="lse-file-tree-body" tabindex="-1"></div>
 			</div>
 			<div class="lse-monaco-section">
+				<div class="lse-editor-toolbar">
+					<div
+						class="lse-theme-toggle"
+						role="radiogroup"
+						aria-label="<?php esc_attr_e( 'Editor theme', 'live-sandbox-editor' ); ?>"
+					>
+						<?php foreach ( $theme_options as $option ) : ?>
+							<button
+								type="button"
+								role="radio"
+								class="lse-theme-toggle-option"
+								data-wp-context="<?php echo esc_attr( wp_json_encode( array( 'value' => $option['value'] ) ) ); ?>"
+								data-wp-on--click="actions.setThemeMode"
+								data-wp-bind--aria-checked="<?php echo esc_attr( $option['is_state'] ); ?>"
+								data-wp-class--is-active="<?php echo esc_attr( $option['is_state'] ); ?>"
+							><?php echo esc_html( $option['label'] ); ?></button>
+						<?php endforeach; ?>
+					</div>
+				</div>
 				<div id="lse-tabs" class="lse-tabs"></div>
 				<div id="lse-monaco" class="lse-monaco-container"></div>
 			</div>
@@ -131,3 +168,5 @@ $quick_links = array(
 		<span data-wp-text="state.statusText"></span>
 	</div>
 </div>
+
+<!-- HOSTMARKER -->

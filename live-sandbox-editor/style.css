@@ -115,6 +115,54 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 	overflow: hidden;
 }
 
+.lse-editor-toolbar {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	background: #252526;
+	border-bottom: 1px solid #3c3c3c;
+	padding: 4px 8px;
+	gap: 6px;
+	flex-shrink: 0;
+}
+
+.lse-theme-toggle {
+	display: inline-flex;
+	background: #1e1e1e;
+	border: 1px solid #3c3c3c;
+	border-radius: 4px;
+	padding: 2px;
+	gap: 2px;
+}
+
+.lse-theme-toggle-option {
+	background: transparent;
+	color: #bbb;
+	border: none;
+	border-radius: 3px;
+	padding: 3px 10px;
+	font: inherit;
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 1.4;
+	cursor: pointer;
+	min-height: 22px;
+}
+
+.lse-theme-toggle-option:hover {
+	color: #fff;
+}
+
+.lse-theme-toggle-option:focus-visible {
+	outline: 2px solid #007acc;
+	outline-offset: -1px;
+}
+
+.lse-theme-toggle-option.is-active {
+	background: #094771;
+	color: #fff;
+}
+
 .lse-tabs {
 	display: flex;
 	background: #252526;
@@ -156,6 +204,7 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 
 .lse-monaco-container {
 	flex: 1;
+	min-height: 0;
 }
 
 /* Drag handle (hidden by default; shown when editor is open) */
@@ -424,4 +473,139 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 	gap: 12px;
 	margin: 0 0 8px;
 	font-size: 12px;
+}
+
+/* Light theme overrides — kept selector-based against the default dark
+   palette above. Surfaces use the wp-admin native palette (#f0f0f1 body,
+   #ffffff cards, #dcdcde borders, #1d2327 / #50575e text) so the editor
+   chrome blends with wp-admin. Status bar (#007acc) reads in both
+   themes; active highlights flip from VS-Code navy (#094771) to WP-admin
+   primary blue (#2271b1). */
+#live-sandbox-editor-root.lse-theme-light {
+	background: #ffffff;
+	color: #1d2327;
+}
+
+.lse-theme-light .lse-file-tree {
+	background: #f0f0f1;
+	border-right-color: #dcdcde;
+}
+
+.lse-theme-light .lse-file-tree-header {
+	color: #50575e;
+	border-bottom-color: #dcdcde;
+}
+
+.lse-theme-light .lse-tree-item:hover {
+	background: #e7e7e7;
+}
+
+.lse-theme-light .lse-editor-toolbar {
+	background: #f0f0f1;
+	border-bottom-color: #dcdcde;
+}
+
+.lse-theme-light .lse-theme-toggle {
+	background: #ffffff;
+	border-color: #dcdcde;
+}
+
+.lse-theme-light .lse-theme-toggle-option {
+	color: #50575e;
+}
+
+.lse-theme-light .lse-theme-toggle-option:hover {
+	color: #1d2327;
+}
+
+/* `color: #fff` is repeated on each active rule because the base
+   `.lse-theme-light .lse-toolbar-btn` / `.lse-theme-toggle-option` /
+   `.lse-url-menu-item` overrides set a dark text color at the same
+   specificity and come later in the source order — without an explicit
+   white here, the active blue surfaces would render dark text on blue. */
+.lse-theme-light .lse-theme-toggle-option.is-active {
+	background: #2271b1;
+	color: #fff;
+}
+
+.lse-theme-light .lse-tree-item.selected {
+	background: #2271b1;
+}
+
+.lse-theme-light .lse-toolbar-btn[aria-pressed="true"] {
+	background: #2271b1;
+	border-color: #2271b1;
+	color: #fff;
+}
+
+.lse-theme-light .lse-url-menu-item:hover,
+.lse-theme-light .lse-url-menu-item:focus {
+	background: #2271b1;
+	color: #fff;
+}
+
+.lse-theme-light .lse-tabs {
+	background: #f0f0f1;
+	border-bottom-color: #dcdcde;
+}
+
+.lse-theme-light .lse-tab {
+	color: #50575e;
+	border-right-color: #dcdcde;
+}
+
+.lse-theme-light .lse-tab.active {
+	background: #ffffff;
+	color: #1d2327;
+}
+
+.lse-theme-light .lse-drag-handle {
+	background: #dcdcde;
+}
+
+.lse-theme-light .lse-toolbar {
+	background: #f0f0f1;
+	border-bottom-color: #dcdcde;
+}
+
+.lse-theme-light .lse-toolbar-btn {
+	color: #1d2327;
+	border-color: #dcdcde;
+}
+
+.lse-theme-light .lse-toolbar-btn:hover {
+	background: #e7e7e7;
+	color: #1d2327;
+}
+
+.lse-theme-light .lse-toolbar-btn:disabled:hover {
+	background: transparent;
+	color: #1d2327;
+}
+
+.lse-theme-light .lse-url-form-group {
+	background: #ffffff;
+	border-color: #dcdcde;
+}
+
+.lse-theme-light .lse-url-input {
+	color: #1d2327;
+}
+
+.lse-theme-light .lse-url-menu {
+	background: #ffffff;
+	border-color: #dcdcde;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.lse-theme-light .lse-url-menu-item {
+	color: #1d2327;
+}
+
+.lse-theme-light .lse-url-menu-path {
+	color: #50575e;
+}
+
+.lse-theme-light .lse-loading {
+	background: rgba(255, 255, 255, 0.92);
 }

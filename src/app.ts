@@ -2,7 +2,7 @@ import { store } from '@wordpress/interactivity';
 import { initFileExplorer } from './file-explorer.js';
 import { readFile, writeFile } from './filesystem.js';
 import type { SyncManifest } from './playground.js';
-import { sandbox } from './store.js';
+import { registerMonacoThemeSetter, sandbox } from './store.js';
 import type { OpenFile } from './types.js';
 
 type EditorMod = typeof import('./editor.js');
@@ -83,7 +83,8 @@ export async function initApp(
 					// editor.js side-effect-imports monaco-environment.js, so
 					// MonacoEnvironment is registered before monaco.editor.create().
 					const mod = await import('./editor.js');
-					mod.initEditor(monacoContainer);
+					mod.initEditor(monacoContainer, sandbox.state.effectiveTheme);
+					registerMonacoThemeSetter(mod.setEditorTheme);
 					// Always register the save command. The wrapper resolves
 					// `saveHandler` at Cmd-S press time, so initialising the
 					// editor before `saveHandler` is assigned (toggle clicked

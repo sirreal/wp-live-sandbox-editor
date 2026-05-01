@@ -3,13 +3,23 @@ import type { PlaygroundClient } from '@wp-playground/client';
 import { initPlayground, type SyncManifest } from './playground.js';
 import { getAppData } from './types.js';
 
+export type ThemeMode = 'light' | 'dark' | 'auto';
+export type EffectiveTheme = 'vs' | 'vs-dark';
+
 export interface SandboxState {
 	url: string;
 	statusText: string;
 	isReady: boolean;
 	editorOpen: boolean;
 	urlMenuOpen: boolean;
+	themeMode: ThemeMode;
+	prefersDark: boolean;
 	readonly notReady: boolean;
+	readonly effectiveTheme: EffectiveTheme;
+	readonly themeIsAuto: boolean;
+	readonly themeIsLight: boolean;
+	readonly themeIsDark: boolean;
+	readonly isLightTheme: boolean;
 }
 
 interface SandboxStore {
@@ -21,11 +31,48 @@ interface SandboxStore {
 		toggleEditor(): void;
 		openUrlMenu(): void;
 		quickNavigate(): Generator<Promise<unknown>, void>;
+		setThemeMode(): void;
 		boot(
 			iframe: HTMLIFrameElement,
 			manifestOverride?: SyncManifest,
 		): Generator<Promise<unknown>, PlaygroundClient | null>;
 	};
+}
+
+const THEME_STORAGE_KEY = 'lse-theme-mode';
+
+function isThemeMode(v: unknown): v is ThemeMode {
+	return v === 'light' || v === 'dark' || v === 'auto';
+}
+
+function readStoredThemeMode(): ThemeMode {
+	try {
+		const v = localStorage.getItem(THEME_STORAGE_KEY);
+		if (isThemeMode(v)) return v;
+	} catch {
+		// localStorage may be unavailable (privacy modes); fall through.
+	}
+	return 'auto';
+}
+
+const darkMediaQuery =
+	typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+		? window.matchMedia('(prefers-color-scheme: dark)')
+		: null;
+
+// Editor module registers a setter once Monaco is loaded so the store can
+// push theme changes without forcing the lazy `monaco-editor` chunk to load
+// before the user opens the editor.
+let monacoSetTheme: ((theme: EffectiveTheme) => void) | null = null;
+
+export function registerMonacoThemeSetter(
+	fn: (theme: EffectiveTheme) => void,
+): void {
+	monacoSetTheme = fn;
+}
+
+function applyMonacoTheme(): void {
+	monacoSetTheme?.(sandbox.state.effectiveTheme);
 }
 
 let client: PlaygroundClient | null = null;
@@ -35,15 +82,35 @@ let client: PlaygroundClient | null = null;
 // focus event doesn't immediately reopen the menu we just closed.
 let suppressNextOpen = false;
 
-// Primitive initial values are authoritative in PHP via
+// Most primitive initial values are authoritative in PHP via
 // `wp_interactivity_state` (see live-sandbox-editor/live-sandbox-editor.php).
-// Only the derived `notReady` getter is declared here; the rest of the shape
-// is supplied by the `SandboxStore` generic and merged from server state at
-// hydration.
+// Exception: `themeMode` is user-specific (localStorage), so the server can't
+// know it — initialised here from `readStoredThemeMode()`. Derived getters
+// (`notReady`, `effectiveTheme`, `themeIs*`) are declared inline below.
 export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 	state: {
+		themeMode: readStoredThemeMode(),
+		prefersDark: !!darkMediaQuery?.matches,
 		get notReady(): boolean {
 			return !sandbox.state.isReady;
+		},
+		get effectiveTheme(): EffectiveTheme {
+			const mode = sandbox.state.themeMode;
+			if (mode === 'light') return 'vs';
+			if (mode === 'dark') return 'vs-dark';
+			return sandbox.state.prefersDark ? 'vs-dark' : 'vs';
+		},
+		get themeIsAuto(): boolean {
+			return sandbox.state.themeMode === 'auto';
+		},
+		get themeIsLight(): boolean {
+			return sandbox.state.themeMode === 'light';
+		},
+		get themeIsDark(): boolean {
+			return sandbox.state.themeMode === 'dark';
+		},
+		get isLightTheme(): boolean {
+			return sandbox.state.effectiveTheme === 'vs';
 		},
 	},
 	actions: {
@@ -64,6 +131,19 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 		},
 		toggleEditor(): void {
 			sandbox.state.editorOpen = !sandbox.state.editorOpen;
+		},
+		setThemeMode(): void {
+			const { value } = getContext<{ value: unknown }>();
+			if (!isThemeMode(value)) return;
+			if (value === sandbox.state.themeMode) return;
+			sandbox.state.themeMode = value;
+			try {
+				localStorage.setItem(THEME_STORAGE_KEY, value);
+			} catch {
+				// Ignore quota / disabled-storage failures; in-memory state
+				// still reflects the user's choice for this session.
+			}
+			applyMonacoTheme();
 		},
 		openUrlMenu(): void {
 			if (suppressNextOpen) {
@@ -125,4 +205,12 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 			return client;
 		},
 	},
+});
+
+// Live-follow OS appearance only when the user has chosen 'auto'. In manual
+// modes the listener fires but the effective theme doesn't change, so the
+// editor stays put.
+darkMediaQuery?.addEventListener('change', (event) => {
+	sandbox.state.prefersDark = event.matches;
+	if (sandbox.state.themeMode === 'auto') applyMonacoTheme();
 });
