@@ -12,7 +12,7 @@ export async function runTestUpgrade(
 	const refresh = await refreshUpdates(client, docroot, req.entry);
 	if (!refresh.found) {
 		onStatus(
-			`No update advertised for ${req.entry} — Playground couldn't resolve it.`,
+			`No update advertised for ${req.entry}. Playground couldn't resolve it.`,
 		);
 		// Best effort: still navigate to plugins.php so the user can see
 		// the state for themselves.
@@ -20,7 +20,8 @@ export async function runTestUpgrade(
 		return;
 	}
 
-	onStatus('Triggering upgrade…');
+	const versionLabel = refresh.newVersion ? `to ${refresh.newVersion} ` : '';
+	onStatus(`Triggering upgrade ${versionLabel}…`);
 	const nonce = await mintUpgradeNonce(client, docroot, req.entry);
 
 	// Show plugins.php first so the "There is a new version" row is visible
@@ -36,7 +37,7 @@ export async function runTestUpgrade(
 	});
 	await client.goTo(`/wp-admin/update.php?${params.toString()}`);
 
-	onStatus('Upgrade in progress — see iframe.');
+	onStatus('Upgrade in progress. See iframe.');
 }
 
 interface RefreshResult {
@@ -51,7 +52,7 @@ async function refreshUpdates(
 ): Promise<RefreshResult> {
 	const result = await client.run({
 		code: `<?php
-			require '${docroot}/wp-load.php';
+			require ${phpStr(docroot)} . '/wp-load.php';
 			wp_set_current_user(1);
 			delete_site_transient('update_plugins');
 			if (!function_exists('wp_update_plugins')) {
@@ -68,8 +69,13 @@ async function refreshUpdates(
 			echo json_encode(array('found' => $found, 'newVersion' => $new_version));
 		`,
 	});
-	const parsed = JSON.parse(result.text) as RefreshResult;
-	return parsed;
+	try {
+		return JSON.parse(result.text) as RefreshResult;
+	} catch (err) {
+		throw new Error(
+			`refreshUpdates: failed to parse PHP response (${result.text.slice(0, 200)})`,
+		);
+	}
 }
 
 async function mintUpgradeNonce(
@@ -79,7 +85,7 @@ async function mintUpgradeNonce(
 ): Promise<string> {
 	const result = await client.run({
 		code: `<?php
-			require '${docroot}/wp-load.php';
+			require ${phpStr(docroot)} . '/wp-load.php';
 			wp_set_current_user(1);
 			echo wp_create_nonce('upgrade-plugin_' . ${phpStr(entry)});
 		`,
