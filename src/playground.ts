@@ -1,4 +1,5 @@
 import type { PlaygroundClient } from '@wp-playground/client';
+import type { TestUpgradeRequest } from './types.js';
 import postImportFixupsPhp from './post-import-fixups.php?raw';
 import { BatchedDiskFlusher, readSyncStream } from './streaming.js';
 import { getAppData } from './types.js';
@@ -40,6 +41,7 @@ export async function initPlayground(
 	onStatus: (status: string) => void,
 	debug: DebugSettings,
 	manifestOverride?: SyncManifest,
+	testUpgrade?: TestUpgradeRequest,
 ): Promise<PlaygroundClient> {
 	const debugMode = debug.scriptDebug || debug.wpDebug;
 	const { startPlaygroundWeb } = await import('@wp-playground/client');
@@ -61,6 +63,9 @@ export async function initPlayground(
 	onStatus('Resolving sync manifest…');
 	const manifestResp = await fetchManifest();
 	const manifest = manifestOverride ?? manifestResp.manifest;
+	if (testUpgrade && !manifest.plugins.includes(testUpgrade.entry)) {
+		manifest.plugins = [...manifest.plugins, testUpgrade.entry];
+	}
 	const dbContext: ManifestResponse = { ...manifestResp, manifest };
 
 	if (debugMode) {
@@ -85,6 +90,12 @@ export async function initPlayground(
 
 	onStatus('Finalizing sandbox…');
 	await applyPostImportFixups(client, hasDb ? dbContext : null, onStatus);
+
+	if (testUpgrade) {
+		onStatus('Preparing upgrade test…');
+		const { runTestUpgrade } = await import('./test-upgrade.js');
+		await runTestUpgrade(client, testUpgrade, onStatus);
+	}
 
 	return client;
 }
