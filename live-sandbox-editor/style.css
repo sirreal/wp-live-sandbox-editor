@@ -115,6 +115,54 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 	overflow: hidden;
 }
 
+.lse-editor-toolbar {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	background: #252526;
+	border-bottom: 1px solid #3c3c3c;
+	padding: 4px 8px;
+	gap: 6px;
+	flex-shrink: 0;
+}
+
+.lse-theme-toggle {
+	display: inline-flex;
+	background: #1e1e1e;
+	border: 1px solid #3c3c3c;
+	border-radius: 4px;
+	padding: 2px;
+	gap: 2px;
+}
+
+.lse-theme-toggle-option {
+	background: transparent;
+	color: #bbb;
+	border: none;
+	border-radius: 3px;
+	padding: 3px 10px;
+	font: inherit;
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 1.4;
+	cursor: pointer;
+	min-height: 22px;
+}
+
+.lse-theme-toggle-option:hover {
+	color: #fff;
+}
+
+.lse-theme-toggle-option:focus-visible {
+	outline: 2px solid #007acc;
+	outline-offset: -1px;
+}
+
+.lse-theme-toggle-option.is-active {
+	background: #094771;
+	color: #fff;
+}
+
 .lse-tabs {
 	display: flex;
 	background: #252526;
@@ -156,6 +204,7 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 
 .lse-monaco-container {
 	flex: 1;
+	min-height: 0;
 }
 
 /* Drag handle (hidden by default; shown when editor is open) */
