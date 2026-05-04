@@ -6,10 +6,8 @@ export async function runTestUpgrade(
 	req: TestUpgradeRequest,
 	onStatus: (status: string) => void,
 ): Promise<void> {
-	const docroot = await client.documentRoot;
-
 	onStatus('Triggering upgrade…');
-	const nonce = await mintUpgradeNonce(client, docroot, req.entry);
+	const upgradeUrl = await findUpgradeUrl(client, req.entry);
 
 	// Show plugins.php first so the "There is a new version" row is visible
 	// for one beat before the upgrade screen takes over. The 800 ms delay is
@@ -17,37 +15,41 @@ export async function runTestUpgrade(
 	await client.goTo('/wp-admin/plugins.php');
 	await sleep(800);
 
-	const params = new URLSearchParams({
-		action: 'upgrade-plugin',
-		plugin: req.entry,
-		_wpnonce: nonce,
-	});
-	await client.goTo(`/wp-admin/update.php?${params.toString()}`);
-
+	await client.goTo(upgradeUrl);
 	onStatus('Upgrade in progress. See iframe.');
 }
 
-async function mintUpgradeNonce(
+/**
+ * Locate the per-row upgrade link in plugins.php and return its href
+ * (including the embedded nonce). Fetching the HTML via `client.request`
+ * runs the PHP request inside the iframe's auth session, so the rendered
+ * `_wpnonce` matches what `update.php` will expect from the iframe's own
+ * navigation. Minting the nonce via `client.run()` would use a different
+ * session token (no LOGGED_IN cookie) and trip "link expired."
+ */
+async function findUpgradeUrl(
 	client: PlaygroundClient,
-	docroot: string,
 	entry: string,
 ): Promise<string> {
-	const result = await client.run({
-		code: `<?php
-			require ${phpStr(docroot)} . '/wp-load.php';
-			wp_set_current_user(1);
-			echo wp_create_nonce('upgrade-plugin_' . ${phpStr(entry)});
-		`,
-	});
-	const nonce = result.text.trim();
-	if (!/^[a-f0-9]{8,}$/i.test(nonce)) {
-		throw new Error(`Failed to mint upgrade nonce; got: ${nonce.slice(0, 80)}`);
+	const response = await client.request({ url: '/wp-admin/plugins.php' });
+	const html = response.text;
+
+	const encodedEntry = encodeURIComponent(entry);
+	const re = new RegExp(
+		`update\\.php\\?action=upgrade-plugin&(?:amp;)?plugin=${escapeRegex(encodedEntry)}&(?:amp;)?_wpnonce=([a-f0-9]+)`,
+		'i',
+	);
+	const match = html.match(re);
+	if (!match) {
+		throw new Error(
+			`No upgrade link found on plugins.php for ${entry}. The transferred update_plugins transient may have been overwritten or the plugin isn't installed in Playground.`,
+		);
 	}
-	return nonce;
+	return `/wp-admin/update.php?action=upgrade-plugin&plugin=${encodedEntry}&_wpnonce=${match[1]}`;
 }
 
-function phpStr(s: string): string {
-	return `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+function escapeRegex(s: string): string {
+	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function sleep(ms: number): Promise<void> {
