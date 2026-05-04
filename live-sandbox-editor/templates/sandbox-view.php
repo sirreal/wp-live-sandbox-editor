@@ -52,6 +52,7 @@ $quick_links = array(
 			data-wp-bind--aria-pressed="state.editorOpen"
 			disabled
 			aria-label="Toggle code editor"
+			title="Toggle code editor"
 		><span class="dashicons dashicons-editor-code" aria-hidden="true"></span></button>
 		<button
 			type="button"
@@ -60,6 +61,7 @@ $quick_links = array(
 			data-wp-bind--disabled="state.notReady"
 			disabled
 			aria-label="Refresh"
+			title="Refresh"
 		>↺</button>
 		<form class="lse-url-form" data-wp-on--submit="actions.navigate">
 			<div class="lse-url-form-group">
