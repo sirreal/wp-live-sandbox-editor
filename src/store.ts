@@ -1,8 +1,8 @@
 import { getContext, store } from '@wordpress/interactivity';
 import type { PlaygroundClient } from '@wp-playground/client';
 import { initPlayground, type SyncManifest } from './playground.js';
-import { getAppData } from './types.js';
 import type { TestUpgradeRequest } from './types.js';
+import { getAppData } from './types.js';
 
 export interface SandboxState {
 	url: string;
@@ -136,21 +136,13 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 					'./test-upgrade.js'
 				)) as typeof import('./test-upgrade.js');
 				try {
-					yield mod.runTestUpgrade(
-						client,
-						testUpgrade,
-						(s: string) => {
-							sandbox.state.statusText = s;
-						},
-					);
+					yield mod.runTestUpgrade(client, testUpgrade, (s: string) => {
+						sandbox.state.statusText = s;
+					});
 				} catch (err) {
-					const message =
-						err instanceof Error ? err.message : String(err);
+					const message = err instanceof Error ? err.message : String(err);
 					sandbox.state.statusText = `Upgrade test failed: ${message}`;
-					console.error(
-						'[live-sandbox-editor] runTestUpgrade error:',
-						err,
-					);
+					console.error('[live-sandbox-editor] runTestUpgrade error:', err);
 				}
 			}
 

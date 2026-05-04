@@ -148,7 +148,11 @@ export async function initApp(
 		},
 	});
 
-	const client = await sandbox.actions.boot(iframe, manifestOverride, testUpgrade);
+	const client = await sandbox.actions.boot(
+		iframe,
+		manifestOverride,
+		testUpgrade,
+	);
 	if (!client) return;
 
 	saveHandler = async (path, content) => {

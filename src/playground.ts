@@ -1,8 +1,8 @@
 import type { PlaygroundClient } from '@wp-playground/client';
-import type { TestUpgradeRequest } from './types.js';
 import iframeTargetFixMuPhp from './iframe-target-fix.mu.php?raw';
 import postImportFixupsPhp from './post-import-fixups.php?raw';
 import { BatchedDiskFlusher, readSyncStream } from './streaming.js';
+import type { TestUpgradeRequest } from './types.js';
 import { getAppData } from './types.js';
 import uploadsPassthroughMuPhp from './uploads-passthrough.mu.php?raw';
 
