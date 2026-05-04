@@ -37,6 +37,14 @@ function parseTestUpgradeParam(): TestUpgradeRequest | undefined {
 		console.warn('[live-sandbox-editor] Ignoring malformed testUpgrade param.');
 		return undefined;
 	}
+	for (const segment of raw.split('/')) {
+		if (segment === '' || segment === '.' || segment === '..') {
+			console.warn(
+				'[live-sandbox-editor] Ignoring malformed testUpgrade param.',
+			);
+			return undefined;
+		}
+	}
 	return { entry: raw };
 }
 

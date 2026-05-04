@@ -32,14 +32,16 @@ async function findUpgradeUrl(
 	entry: string,
 ): Promise<string> {
 	const response = await client.request({ url: '/wp-admin/plugins.php' });
-	const html = response.text;
+	// esc_url() can emit either &amp; or &#038; for query separators in admin
+	// link hrefs. Normalize to plain & so a single regex covers both forms.
+	const normalized = response.text.replace(/&(?:amp;|#038;)/g, '&');
 
 	const encodedEntry = encodeURIComponent(entry);
 	const re = new RegExp(
-		`update\\.php\\?action=upgrade-plugin&(?:amp;)?plugin=${escapeRegex(encodedEntry)}&(?:amp;)?_wpnonce=([a-f0-9]+)`,
+		`update\\.php\\?action=upgrade-plugin&plugin=${escapeRegex(encodedEntry)}&_wpnonce=([a-f0-9]+)`,
 		'i',
 	);
-	const match = html.match(re);
+	const match = normalized.match(re);
 	if (!match) {
 		throw new Error(
 			`No upgrade link found on plugins.php for ${entry}. The transferred update_plugins transient may have been overwritten or the plugin isn't installed in Playground.`,

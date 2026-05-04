@@ -23,7 +23,7 @@ function init(): void {
  * apply.
  */
 function register_update_message_hooks(): void {
-	if ( ! current_user_can( 'update_plugins' ) ) {
+	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
 	}
 	$updates = get_site_transient( 'update_plugins' );
