@@ -41,19 +41,23 @@ function register_update_message_hooks(): void {
 }
 
 /**
- * Echo the link inside the update-message paragraph. Leading space
- * separates it from the standard "View version X details" / "update now"
- * links that precede it.
+ * Echo the link inside the update-message paragraph. The `<br>` breaks it
+ * onto its own line below the standard "View version X details" / "update
+ * now" links so the sandbox-test offer reads as a distinct alternative.
  */
 function render_link( string $entry ): void {
 	$run_url = menu_page_url( Live_Sandbox_Editor\SLUG, false );
 	$href    = add_query_arg( 'testUpgrade', $entry, $run_url );
-	$label   = __( 'Test upgrade in sandbox', 'live-sandbox-editor' );
+	$label   = __( 'test the plugin update in the sandbox', 'live-sandbox-editor' );
 
 	printf(
-		' <a href="%s" class="lse-test-upgrade-link" data-lse-test-upgrade="%s">%s</a>',
-		esc_url( $href ),
-		esc_attr( $entry ),
-		esc_html( $label )
+		/* translators: %s: link to test the update in the Live Sandbox Editor. */
+		'<br>' . esc_html__( 'Or %s.', 'live-sandbox-editor' ),
+		sprintf(
+			'<a href="%s" class="lse-test-upgrade-link" data-lse-test-upgrade="%s">%s</a>',
+			esc_url( $href ),
+			esc_attr( $entry ),
+			esc_html( $label )
+		)
 	);
 }
