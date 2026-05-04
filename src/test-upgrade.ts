@@ -8,20 +8,7 @@ export async function runTestUpgrade(
 ): Promise<void> {
 	const docroot = await client.documentRoot;
 
-	onStatus('Refreshing plugin updates…');
-	const refresh = await refreshUpdates(client, docroot, req.entry);
-	if (!refresh.found) {
-		onStatus(
-			`No update advertised for ${req.entry}. Playground couldn't resolve it.`,
-		);
-		// Best effort: still navigate to plugins.php so the user can see
-		// the state for themselves.
-		await client.goTo('/wp-admin/plugins.php');
-		return;
-	}
-
-	const versionLabel = refresh.newVersion ? `to ${refresh.newVersion} ` : '';
-	onStatus(`Triggering upgrade ${versionLabel}…`);
+	onStatus('Triggering upgrade…');
 	const nonce = await mintUpgradeNonce(client, docroot, req.entry);
 
 	// Show plugins.php first so the "There is a new version" row is visible
@@ -38,44 +25,6 @@ export async function runTestUpgrade(
 	await client.goTo(`/wp-admin/update.php?${params.toString()}`);
 
 	onStatus('Upgrade in progress. See iframe.');
-}
-
-interface RefreshResult {
-	found: boolean;
-	newVersion: string | null;
-}
-
-async function refreshUpdates(
-	client: PlaygroundClient,
-	docroot: string,
-	entry: string,
-): Promise<RefreshResult> {
-	const result = await client.run({
-		code: `<?php
-			require ${phpStr(docroot)} . '/wp-load.php';
-			wp_set_current_user(1);
-			delete_site_transient('update_plugins');
-			if (!function_exists('wp_update_plugins')) {
-				require_once ABSPATH . 'wp-admin/includes/update.php';
-			}
-			wp_update_plugins();
-			$updates = get_site_transient('update_plugins');
-			$entry = ${phpStr(entry)};
-			$found = is_object($updates) && !empty($updates->response[$entry]);
-			$new_version = null;
-			if ($found && isset($updates->response[$entry]->new_version)) {
-				$new_version = (string) $updates->response[$entry]->new_version;
-			}
-			echo json_encode(array('found' => $found, 'newVersion' => $new_version));
-		`,
-	});
-	try {
-		return JSON.parse(result.text) as RefreshResult;
-	} catch (err) {
-		throw new Error(
-			`refreshUpdates: failed to parse PHP response (${result.text.slice(0, 200)})`,
-		);
-	}
 }
 
 async function mintUpgradeNonce(
