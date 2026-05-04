@@ -135,13 +135,23 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 				const mod = (yield import(
 					'./test-upgrade.js'
 				)) as typeof import('./test-upgrade.js');
-				yield mod.runTestUpgrade(
-					client,
-					testUpgrade,
-					(s: string) => {
-						sandbox.state.statusText = s;
-					},
-				);
+				try {
+					yield mod.runTestUpgrade(
+						client,
+						testUpgrade,
+						(s: string) => {
+							sandbox.state.statusText = s;
+						},
+					);
+				} catch (err) {
+					const message =
+						err instanceof Error ? err.message : String(err);
+					sandbox.state.statusText = `Upgrade test failed: ${message}`;
+					console.error(
+						'[live-sandbox-editor] runTestUpgrade error:',
+						err,
+					);
+				}
 			}
 
 			return client;
