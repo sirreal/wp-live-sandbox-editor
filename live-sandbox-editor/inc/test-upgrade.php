@@ -35,7 +35,9 @@ function register_update_message_hooks(): void {
 			'in_plugin_update_message-' . $entry,
 			static function () use ( $entry ): void {
 				render_link( (string) $entry );
-			}
+			},
+			10,
+			0
 		);
 	}
 }
