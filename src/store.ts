@@ -3,7 +3,7 @@ import type { PlaygroundClient } from '@wp-playground/client';
 import { initPlayground, type SyncManifest } from './playground.js';
 import { getAppData } from './types.js';
 
-export type ThemeMode = 'light' | 'dark' | 'auto';
+export type ThemeMode = 'light' | 'dark' | 'system';
 export type EffectiveTheme = 'vs' | 'vs-dark';
 
 export interface SandboxState {
@@ -42,7 +42,7 @@ interface SandboxStore {
 const THEME_STORAGE_KEY = 'lse-theme-mode';
 
 function isThemeMode(v: unknown): v is ThemeMode {
-	return v === 'light' || v === 'dark' || v === 'auto';
+	return v === 'light' || v === 'dark' || v === 'system';
 }
 
 function readStoredThemeMode(): ThemeMode {
@@ -52,7 +52,7 @@ function readStoredThemeMode(): ThemeMode {
 	} catch {
 		// localStorage may be unavailable (privacy modes); fall through.
 	}
-	return 'auto';
+	return 'system';
 }
 
 const darkMediaQuery =
@@ -101,7 +101,7 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 			return sandbox.state.prefersDark ? 'vs-dark' : 'vs';
 		},
 		get themeIsAuto(): boolean {
-			return sandbox.state.themeMode === 'auto';
+			return sandbox.state.themeMode === 'system';
 		},
 		get themeIsLight(): boolean {
 			return sandbox.state.themeMode === 'light';
@@ -207,10 +207,10 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 	},
 });
 
-// Live-follow OS appearance only when the user has chosen 'auto'. In manual
+// Live-follow OS appearance only when the user has chosen 'system'. In manual
 // modes the listener fires but the effective theme doesn't change, so the
 // editor stays put.
 darkMediaQuery?.addEventListener('change', (event) => {
 	sandbox.state.prefersDark = event.matches;
-	if (sandbox.state.themeMode === 'auto') applyMonacoTheme();
+	if (sandbox.state.themeMode === 'system') applyMonacoTheme();
 });

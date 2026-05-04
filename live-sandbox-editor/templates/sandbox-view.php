@@ -16,8 +16,8 @@ namespace Live_Sandbox_Editor;
 
 $theme_options = array(
 	array(
-		'value'    => 'auto',
-		'label'    => __( 'Auto', 'live-sandbox-editor' ),
+		'value'    => 'system',
+		'label'    => __( 'System', 'live-sandbox-editor' ),
 		'is_state' => 'state.themeIsAuto',
 	),
 	array(
