@@ -60,7 +60,7 @@ $quick_links = array(
 );
 
 ?>
-<div id="live-sandbox-editor-root" data-wp-interactive="live-sandbox-editor/sandbox" data-wp-class--lse-theme-light="state.isLightTheme">
+<div id="live-sandbox-editor-root" data-wp-interactive="live-sandbox-editor/sandbox" data-wp-style--color-scheme="state.colorScheme">
 	<div class="lse-toolbar">
 		<button
 			type="button"

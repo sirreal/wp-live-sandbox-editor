@@ -19,7 +19,7 @@ export interface SandboxState {
 	readonly themeIsAuto: boolean;
 	readonly themeIsLight: boolean;
 	readonly themeIsDark: boolean;
-	readonly isLightTheme: boolean;
+	readonly colorScheme: string;
 }
 
 interface SandboxStore {
@@ -109,8 +109,11 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 		get themeIsDark(): boolean {
 			return sandbox.state.themeMode === 'dark';
 		},
-		get isLightTheme(): boolean {
-			return sandbox.state.effectiveTheme === 'vs';
+		get colorScheme(): string {
+			const mode = sandbox.state.themeMode;
+			if (mode === 'light') return 'light';
+			if (mode === 'dark') return 'dark';
+			return 'light dark';
 		},
 	},
 	actions: {
