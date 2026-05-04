@@ -9,9 +9,6 @@
  * owned by the editor; `_parent` resolves to the editor's host page,
  * so clicking the link navigates the host out of the sandbox UI.
  *
- * Stripped at click-time via a capturing delegated listener so dynamic
- * content is covered too.
- *
  * @package Live_Sandbox_Editor
  */
 
@@ -22,11 +19,9 @@ add_action(
 <script>
 (function(){
 	document.addEventListener('click', function(e){
-		var t = e.target;
-		if (!t || !t.closest) return;
-		var a = t.closest('a[target="_parent"]');
+		var a = e.target instanceof Element ? e.target.closest('a[target="_parent"]') : null;
 		if (a) a.removeAttribute('target');
-	}, true);
+	}, { capture: true, passive: true });
 })();
 </script>
 		<?php

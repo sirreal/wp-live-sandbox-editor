@@ -456,17 +456,10 @@ async function installIframeTargetFix(
 	client: PlaygroundClient,
 	docroot: string,
 ): Promise<void> {
-	const muDir = `${docroot}/wp-content/mu-plugins`;
-	await client.run({
-		code: `<?php
-			$dir = ${phpStringLiteral(muDir)};
-			@mkdir( $dir, 0755, true );
-			file_put_contents(
-				$dir . '/lse-iframe-target-fix.php',
-				${phpStringLiteral(iframeTargetFixMuPhp)}
-			);
-		`,
-	});
+	await client.writeFile(
+		`${docroot}/wp-content/mu-plugins/lse-iframe-target-fix.php`,
+		iframeTargetFixMuPhp,
+	);
 }
 
 /**
