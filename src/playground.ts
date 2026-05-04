@@ -1,5 +1,6 @@
 import type { PlaygroundClient } from '@wp-playground/client';
 import type { TestUpgradeRequest } from './types.js';
+import iframeTargetFixMuPhp from './iframe-target-fix.mu.php?raw';
 import postImportFixupsPhp from './post-import-fixups.php?raw';
 import { BatchedDiskFlusher, readSyncStream } from './streaming.js';
 import { getAppData } from './types.js';
@@ -420,6 +421,8 @@ async function applyPostImportFixups(
 	const docroot = await client.documentRoot;
 	await client.writeFile(FIXUPS_PATH, postImportFixupsPhp);
 
+	await installIframeTargetFix(client, docroot);
+
 	// URL rewrite is conditional on a DB sync — without one, Playground's
 	// default options shouldn't be smashed with the host's URLs.
 	if (dbContext) {
@@ -445,6 +448,23 @@ async function applyPostImportFixups(
 			require_once '${FIXUPS_PATH}';
 			lse_deactivate_self();
 			${reconcile}
+		`,
+	});
+}
+
+async function installIframeTargetFix(
+	client: PlaygroundClient,
+	docroot: string,
+): Promise<void> {
+	const muDir = `${docroot}/wp-content/mu-plugins`;
+	await client.run({
+		code: `<?php
+			$dir = ${phpStringLiteral(muDir)};
+			@mkdir( $dir, 0755, true );
+			file_put_contents(
+				$dir . '/lse-iframe-target-fix.php',
+				${phpStringLiteral(iframeTargetFixMuPhp)}
+			);
 		`,
 	});
 }
