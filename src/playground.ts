@@ -91,12 +91,6 @@ export async function initPlayground(
 	onStatus('Finalizing sandbox…');
 	await applyPostImportFixups(client, hasDb ? dbContext : null, onStatus);
 
-	if (testUpgrade) {
-		onStatus('Preparing upgrade test…');
-		const { runTestUpgrade } = await import('./test-upgrade.js');
-		await runTestUpgrade(client, testUpgrade, onStatus);
-	}
-
 	return client;
 }
 

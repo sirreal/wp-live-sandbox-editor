@@ -126,6 +126,24 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 				sandbox.state.url = path;
 			});
 
+			// Test-upgrade flow runs after the post-amble so the terminal
+			// status it sets isn't clobbered, and so the iframe refresh that
+			// applies post-import fixups happens before the upgrade dispatch
+			// renavigates.
+			if (testUpgrade) {
+				sandbox.state.statusText = 'Preparing upgrade test…';
+				const mod = (yield import(
+					'./test-upgrade.js'
+				)) as typeof import('./test-upgrade.js');
+				yield mod.runTestUpgrade(
+					client,
+					testUpgrade,
+					(s: string) => {
+						sandbox.state.statusText = s;
+					},
+				);
+			}
+
 			return client;
 		},
 	},
