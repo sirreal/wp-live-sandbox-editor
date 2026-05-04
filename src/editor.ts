@@ -3,15 +3,24 @@
 // bindings are in place when monaco's static graph initialises.
 import './monaco-environment.js';
 import * as monaco from 'monaco-editor';
+import type { EffectiveTheme } from './store.js';
+
+// Runtime imports from store.ts deliberately avoided: store.ts is in the
+// eager main.js chunk; if this lazy chunk imports it, the lazy `import()` URL
+// resolves without the WP enqueue `?ver=…` query and the browser instantiates
+// main.js twice (one per URL identity). app.ts wires the editor up after
+// init instead.
 
 let editor: monaco.editor.IStandaloneCodeEditor | null = null;
 const models = new Map<string, monaco.editor.ITextModel>();
 
 export function initEditor(
 	container: HTMLElement,
+	initialTheme: EffectiveTheme,
 ): monaco.editor.IStandaloneCodeEditor {
+	if (editor) return editor;
 	editor = monaco.editor.create(container, {
-		theme: 'vs-dark',
+		theme: initialTheme,
 		automaticLayout: true,
 		fontSize: 13,
 		lineHeight: 20,
@@ -20,6 +29,10 @@ export function initEditor(
 		renderLineHighlight: 'gutter',
 	});
 	return editor;
+}
+
+export function setEditorTheme(theme: EffectiveTheme): void {
+	monaco.editor.setTheme(theme);
 }
 
 export function loadFileIntoEditor(path: string, content: string): void {

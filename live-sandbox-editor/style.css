@@ -36,8 +36,9 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 	height: 100%;
 	display: flex;
 	flex-direction: column;
-	background: #1e1e1e;
-	color: #ccc;
+	background: light-dark(#ffffff, #1e1e1e);
+	color: light-dark(#1d2327, #ccc);
+	color-scheme: light dark;
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	font-size: 13px;
 }
@@ -61,8 +62,8 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 .lse-file-tree {
 	width: 220px;
 	flex-shrink: 0;
-	background: #252526;
-	border-right: 1px solid #3c3c3c;
+	background: light-dark(#f0f0f1, #252526);
+	border-right: 1px solid light-dark(#dcdcde, #3c3c3c);
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
@@ -74,9 +75,9 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
-	color: #bbb;
+	color: light-dark(#50575e, #bbb);
 	flex-shrink: 0;
-	border-bottom: 1px solid #3c3c3c;
+	border-bottom: 1px solid light-dark(#dcdcde, #3c3c3c);
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
@@ -99,10 +100,10 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 }
 
 .lse-tree-item:hover {
-	background: #2a2d2e;
+	background: light-dark(#e7e7e7, #2a2d2e);
 }
 .lse-tree-item.selected {
-	background: #094771;
+	background: light-dark(#2271b1, #094771);
 	color: #fff;
 }
 
@@ -115,10 +116,58 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 	overflow: hidden;
 }
 
+.lse-editor-toolbar {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	background: light-dark(#f0f0f1, #252526);
+	border-bottom: 1px solid light-dark(#dcdcde, #3c3c3c);
+	padding: 4px 8px;
+	gap: 6px;
+	flex-shrink: 0;
+}
+
+.lse-theme-toggle {
+	display: inline-flex;
+	background: light-dark(#ffffff, #1e1e1e);
+	border: 1px solid light-dark(#dcdcde, #3c3c3c);
+	border-radius: 4px;
+	padding: 2px;
+	gap: 2px;
+}
+
+.lse-theme-toggle-option {
+	background: transparent;
+	color: light-dark(#50575e, #bbb);
+	border: none;
+	border-radius: 3px;
+	padding: 3px 10px;
+	font: inherit;
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 1.4;
+	cursor: pointer;
+	min-height: 22px;
+}
+
+.lse-theme-toggle-option:hover {
+	color: light-dark(#1d2327, #fff);
+}
+
+.lse-theme-toggle-option:focus-visible {
+	outline: 2px solid #007acc;
+	outline-offset: -1px;
+}
+
+.lse-theme-toggle-option.is-active {
+	background: light-dark(#2271b1, #094771);
+	color: #fff;
+}
+
 .lse-tabs {
 	display: flex;
-	background: #252526;
-	border-bottom: 1px solid #3c3c3c;
+	background: light-dark(#f0f0f1, #252526);
+	border-bottom: 1px solid light-dark(#dcdcde, #3c3c3c);
 	overflow-x: auto;
 	flex-shrink: 0;
 	min-height: 35px;
@@ -127,8 +176,8 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 .lse-tab {
 	padding: 6px 20px 6px 12px;
 	cursor: pointer;
-	color: #969696;
-	border-right: 1px solid #3c3c3c;
+	color: light-dark(#50575e, #969696);
+	border-right: 1px solid light-dark(#dcdcde, #3c3c3c);
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -138,8 +187,8 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 }
 
 .lse-tab.active {
-	background: #1e1e1e;
-	color: #fff;
+	background: light-dark(#ffffff, #1e1e1e);
+	color: light-dark(#1d2327, #fff);
 	border-top: 2px solid #007acc;
 }
 
@@ -156,12 +205,13 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 
 .lse-monaco-container {
 	flex: 1;
+	min-height: 0;
 }
 
 /* Drag handle (hidden by default; shown when editor is open) */
 .lse-drag-handle {
 	width: 4px;
-	background: #3c3c3c;
+	background: light-dark(#dcdcde, #3c3c3c);
 	cursor: col-resize;
 	flex-shrink: 0;
 	display: none;
@@ -197,8 +247,8 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 /* Top toolbar (full width, lifted from the preview pane). */
 .lse-toolbar {
 	min-height: 36px;
-	background: #2d2d2d;
-	border-bottom: 1px solid #3c3c3c;
+	background: light-dark(#f0f0f1, #2d2d2d);
+	border-bottom: 1px solid light-dark(#dcdcde, #3c3c3c);
 	display: flex;
 	align-items: center;
 	padding: 4px 8px;
@@ -209,8 +259,8 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 
 .lse-toolbar-btn {
 	background: transparent;
-	color: #ccc;
-	border: 1px solid #3c3c3c;
+	color: light-dark(#1d2327, #ccc);
+	border: 1px solid light-dark(#dcdcde, #3c3c3c);
 	border-radius: 3px;
 	padding: 3px 8px;
 	cursor: pointer;
@@ -227,14 +277,14 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 }
 
 .lse-toolbar-btn[aria-pressed="true"] {
-	background: #094771;
+	background: light-dark(#2271b1, #094771);
 	color: #fff;
-	border-color: #094771;
+	border-color: light-dark(#2271b1, #094771);
 }
 
 .lse-toolbar-btn:hover {
-	background: #2a2d2e;
-	color: #fff;
+	background: light-dark(#e7e7e7, #2a2d2e);
+	color: light-dark(#1d2327, #fff);
 }
 
 .lse-toolbar-btn:disabled,
@@ -245,7 +295,7 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 
 .lse-toolbar-btn:disabled:hover {
 	background: transparent;
-	color: #ccc;
+	color: light-dark(#1d2327, #ccc);
 }
 
 .lse-url-form {
@@ -261,8 +311,8 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 	position: relative;
 	display: flex;
 	align-items: stretch;
-	background: #1e1e1e;
-	border: 1px solid #3c3c3c;
+	background: light-dark(#ffffff, #1e1e1e);
+	border: 1px solid light-dark(#dcdcde, #3c3c3c);
 	border-radius: 3px;
 }
 
@@ -274,7 +324,7 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 	flex: 1;
 	min-width: 0;
 	background: transparent;
-	color: #ccc;
+	color: light-dark(#1d2327, #ccc);
 	border: none;
 	padding: 4px 8px;
 	font: inherit;
@@ -287,10 +337,10 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 	top: calc(100% + 4px);
 	left: 0;
 	right: 0;
-	background: #252526;
-	border: 1px solid #3c3c3c;
+	background: light-dark(#ffffff, #252526);
+	border: 1px solid light-dark(#dcdcde, #3c3c3c);
 	border-radius: 3px;
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+	box-shadow: 0 4px 12px light-dark(rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.4));
 	padding: 4px 0;
 	z-index: 50;
 	max-height: 320px;
@@ -303,7 +353,7 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 	gap: 12px;
 	width: 100%;
 	background: transparent;
-	color: #ccc;
+	color: light-dark(#1d2327, #ccc);
 	border: none;
 	padding: 6px 12px;
 	font: inherit;
@@ -314,7 +364,7 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 
 .lse-url-menu-item:hover,
 .lse-url-menu-item:focus {
-	background: #094771;
+	background: light-dark(#2271b1, #094771);
 	color: #fff;
 	outline: none;
 }
@@ -325,7 +375,7 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 }
 
 .lse-url-menu-path {
-	color: #888;
+	color: light-dark(#50575e, #888);
 	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -335,7 +385,7 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 
 .lse-url-menu-item:hover .lse-url-menu-path,
 .lse-url-menu-item:focus .lse-url-menu-path {
-	color: #cde;
+	color: light-dark(#fff, #cde);
 }
 
 .lse-preview-iframe {
@@ -361,7 +411,7 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 .lse-loading {
 	position: fixed;
 	inset: 0;
-	background: rgba(30, 30, 30, 0.92);
+	background: light-dark(rgba(255, 255, 255, 0.92), rgba(30, 30, 30, 0.92));
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -378,7 +428,7 @@ body.live-sandbox-editor_page_live-sandbox-editor #wpbody-content {
 .lse-spinner {
 	width: 24px;
 	height: 24px;
-	border: 3px solid #555;
+	border: 3px solid light-dark(#d0d0d0, #555);
 	border-top-color: #007acc;
 	border-radius: 50%;
 	animation: lse-spin 0.8s linear infinite;
