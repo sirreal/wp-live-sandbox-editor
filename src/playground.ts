@@ -2,7 +2,7 @@ import type { PlaygroundClient } from '@wp-playground/client';
 import iframeTargetFixMuPhp from './iframe-target-fix.mu.php?raw';
 import postImportFixupsPhp from './post-import-fixups.php?raw';
 import { BatchedDiskFlusher, readSyncStream } from './streaming.js';
-import type { TestUpgradeRequest } from './types.js';
+import type { TestThemeUpgradeRequest, TestUpgradeRequest } from './types.js';
 import { getAppData } from './types.js';
 import uploadsPassthroughMuPhp from './uploads-passthrough.mu.php?raw';
 
@@ -43,6 +43,7 @@ export async function initPlayground(
 	debug: DebugSettings,
 	manifestOverride?: SyncManifest,
 	testUpgrade?: TestUpgradeRequest,
+	testThemeUpgrade?: TestThemeUpgradeRequest,
 ): Promise<PlaygroundClient> {
 	const debugMode = debug.scriptDebug || debug.wpDebug;
 	const { startPlaygroundWeb } = await import('@wp-playground/client');
@@ -66,6 +67,9 @@ export async function initPlayground(
 	const manifest = manifestOverride ?? manifestResp.manifest;
 	if (testUpgrade && !manifest.plugins.includes(testUpgrade.entry)) {
 		manifest.plugins = [...manifest.plugins, testUpgrade.entry];
+	}
+	if (testThemeUpgrade && !manifest.themes.includes(testThemeUpgrade.slug)) {
+		manifest.themes = [...manifest.themes, testThemeUpgrade.slug];
 	}
 	const dbContext: ManifestResponse = { ...manifestResp, manifest };
 

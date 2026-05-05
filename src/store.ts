@@ -1,7 +1,7 @@
 import { getContext, store } from '@wordpress/interactivity';
 import type { PlaygroundClient } from '@wp-playground/client';
 import { initPlayground, type SyncManifest } from './playground.js';
-import type { TestUpgradeRequest } from './types.js';
+import type { TestThemeUpgradeRequest, TestUpgradeRequest } from './types.js';
 import { getAppData } from './types.js';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -37,6 +37,7 @@ interface SandboxStore {
 			iframe: HTMLIFrameElement,
 			manifestOverride?: SyncManifest,
 			testUpgrade?: TestUpgradeRequest,
+			testThemeUpgrade?: TestThemeUpgradeRequest,
 		): Generator<Promise<unknown>, PlaygroundClient | null>;
 	};
 }
@@ -178,6 +179,7 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 			iframe: HTMLIFrameElement,
 			manifestOverride?: SyncManifest,
 			testUpgrade?: TestUpgradeRequest,
+			testThemeUpgrade?: TestThemeUpgradeRequest,
 		): Generator<Promise<unknown>, PlaygroundClient | null> {
 			const { scriptDebug, wpDebug } = getAppData();
 			try {
@@ -189,6 +191,7 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 					{ scriptDebug, wpDebug },
 					manifestOverride,
 					testUpgrade,
+					testThemeUpgrade,
 				)) as PlaygroundClient;
 			} catch (err) {
 				sandbox.state.statusText = 'Playground failed to initialize.';
@@ -209,8 +212,8 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 				sandbox.state.url = path;
 			});
 
-			// Test-upgrade flow runs after the post-amble so the terminal
-			// status it sets isn't clobbered, and so the iframe refresh that
+			// Test-upgrade flows run after the post-amble so the terminal
+			// status they set isn't clobbered, and so the iframe refresh that
 			// applies post-import fixups happens before the upgrade dispatch
 			// renavigates.
 			if (testUpgrade) {
@@ -226,6 +229,29 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 					const message = err instanceof Error ? err.message : String(err);
 					sandbox.state.statusText = `Upgrade test failed: ${message}`;
 					console.error('[live-sandbox-editor] runTestUpgrade error:', err);
+				}
+			}
+
+			if (testThemeUpgrade) {
+				sandbox.state.statusText = 'Preparing theme upgrade test…';
+				const mod = (yield import(
+					'./test-upgrade.js'
+				)) as typeof import('./test-upgrade.js');
+				try {
+					yield mod.runTestThemeUpgrade(
+						client,
+						testThemeUpgrade,
+						(s: string) => {
+							sandbox.state.statusText = s;
+						},
+					);
+				} catch (err) {
+					const message = err instanceof Error ? err.message : String(err);
+					sandbox.state.statusText = `Theme upgrade test failed: ${message}`;
+					console.error(
+						'[live-sandbox-editor] runTestThemeUpgrade error:',
+						err,
+					);
 				}
 			}
 

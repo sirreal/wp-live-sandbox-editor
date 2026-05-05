@@ -1,6 +1,6 @@
 import { initApp } from './app.js';
 import type { SyncManifest } from './playground.js';
-import type { TestUpgradeRequest } from './types.js';
+import type { TestThemeUpgradeRequest, TestUpgradeRequest } from './types.js';
 
 function parseManifestParam(): SyncManifest | undefined {
 	const raw = new URLSearchParams(window.location.search).get('manifest');
@@ -48,13 +48,31 @@ function parseTestUpgradeParam(): TestUpgradeRequest | undefined {
 	return { entry: raw };
 }
 
+function parseTestThemeUpgradeParam(): TestThemeUpgradeRequest | undefined {
+	const raw = new URLSearchParams(window.location.search).get(
+		'testThemeUpgrade',
+	);
+	if (!raw) return undefined;
+	// Mirror is_safe_theme_slug on the PHP side.
+	if (!/^[A-Za-z0-9._-]+$/.test(raw) || raw === '.' || raw === '..') {
+		console.warn(
+			'[live-sandbox-editor] Ignoring malformed testThemeUpgrade param.',
+		);
+		return undefined;
+	}
+	return { slug: raw };
+}
+
 const root = document.getElementById('live-sandbox-editor-root');
 if (!root) {
 	console.error('[live-sandbox-editor] Root element not found.');
 } else {
-	initApp(root, parseManifestParam(), parseTestUpgradeParam()).catch(
-		(err: unknown) => {
-			console.error('[live-sandbox-editor] App init failed:', err);
-		},
-	);
+	initApp(
+		root,
+		parseManifestParam(),
+		parseTestUpgradeParam(),
+		parseTestThemeUpgradeParam(),
+	).catch((err: unknown) => {
+		console.error('[live-sandbox-editor] App init failed:', err);
+	});
 }

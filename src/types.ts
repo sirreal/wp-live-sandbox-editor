@@ -32,6 +32,10 @@ export interface TestUpgradeRequest {
 	entry: string;
 }
 
+export interface TestThemeUpgradeRequest {
+	slug: string;
+}
+
 export function getAppData(moduleId = 'live-sandbox-editor'): AppData {
 	const el = document.getElementById(`wp-script-module-data-${moduleId}`);
 	return JSON.parse(el?.textContent ?? '{}') as AppData;
