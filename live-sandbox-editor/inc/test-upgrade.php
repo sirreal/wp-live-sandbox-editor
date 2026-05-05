@@ -16,6 +16,7 @@ function init(): void {
 	add_action( 'admin_init', __NAMESPACE__ . '\\register_update_message_hooks' );
 	add_action( 'admin_init', __NAMESPACE__ . '\\register_theme_update_message_hooks' );
 	add_filter( 'wp_prepare_themes_for_js', __NAMESPACE__ . '\\inject_theme_sandbox_links' );
+	add_action( 'admin_footer-themes.php', __NAMESPACE__ . '\\print_themes_grid_script' );
 }
 
 /**
@@ -144,4 +145,100 @@ function build_theme_link_html( string $slug ): string {
 			esc_html( $label )
 		)
 	);
+}
+
+/**
+ * Inject the sandbox link into per-card update notices on themes.php.
+ *
+ * The card-level "New version available." notice is rendered inline by
+ * themes.php (no per-card PHP hook), and the JS template re-renders cards
+ * on Backbone model changes — so this script (a) walks initial DOM after
+ * load and (b) reapplies via MutationObserver. WordPress's themes.js
+ * delegates `click .update-message` to its own `updateTheme` handler, so
+ * the injected link calls `stopPropagation` to keep the click from being
+ * hijacked into the AJAX-update flow.
+ */
+function print_themes_grid_script(): void {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+	$updates = get_site_transient( 'update_themes' );
+	if ( ! is_object( $updates ) || empty( $updates->response ) || ! is_array( $updates->response ) ) {
+		return;
+	}
+	$run_url = menu_page_url( Live_Sandbox_Editor\SLUG, false );
+	$hrefs   = array();
+	foreach ( array_keys( $updates->response ) as $slug ) {
+		$hrefs[ (string) $slug ] = add_query_arg( 'testThemeUpgrade', $slug, $run_url );
+	}
+	$label    = __( 'test the theme update in the sandbox', 'live-sandbox-editor' );
+	$or_label = __( 'Or %s.', 'live-sandbox-editor' );
+	?>
+	<script>
+	(function() {
+		var hrefs = <?php echo wp_json_encode( $hrefs ); ?>;
+		var linkLabel = <?php echo wp_json_encode( $label ); ?>;
+		var orFmt = <?php echo wp_json_encode( $or_label ); ?>;
+
+		function slugFor(card) {
+			// JS-rendered cards have data-slug; PHP-rendered cards expose the
+			// slug via the theme-name id ("{slug}-name").
+			var slug = card.getAttribute('data-slug');
+			if (slug) return slug;
+			var name = card.querySelector('.theme-name[id$="-name"]');
+			if (!name) return null;
+			return name.id.replace(/-name$/, '');
+		}
+
+		function append(card) {
+			var msg = card.querySelector('.update-message');
+			if (!msg) return;
+			if (msg.querySelector('.lse-test-upgrade-link')) return;
+			var p = msg.querySelector('p');
+			if (!p) return;
+			var slug = slugFor(card);
+			var href = slug && hrefs[slug];
+			if (!href) return;
+
+			var link = document.createElement('a');
+			link.className = 'lse-test-upgrade-link';
+			link.href = href;
+			link.textContent = linkLabel;
+			link.setAttribute('data-lse-test-theme-upgrade', slug);
+			// themes.js delegates `click .update-message` to its own handler.
+			// Without stopPropagation the link click would trigger the AJAX
+			// update flow instead of navigating.
+			link.addEventListener('click', function(e) { e.stopPropagation(); });
+
+			var parts = orFmt.split('%s');
+			p.appendChild(document.createElement('br'));
+			p.appendChild(document.createTextNode(parts[0] || ''));
+			p.appendChild(link);
+			p.appendChild(document.createTextNode(parts[1] || ''));
+		}
+
+		function processAll() {
+			document.querySelectorAll('.theme').forEach(append);
+		}
+
+		if (document.readyState !== 'loading') {
+			processAll();
+		} else {
+			document.addEventListener('DOMContentLoaded', processAll);
+		}
+
+		// themes.js's main render path empties `.wrap` and appends a fresh
+		// `.themes` container, so the original `.themes` node we'd observe
+		// gets detached. Observe `#wpbody-content` (a stable ancestor) and
+		// re-process on any subtree change.
+		var container = document.getElementById('wpbody-content') || document.body;
+		if (container && typeof MutationObserver === 'function') {
+			new MutationObserver(processAll).observe(container, {
+				childList: true,
+				subtree: true,
+			});
+		}
+	})();
+	</script>
+	<?php
 }
