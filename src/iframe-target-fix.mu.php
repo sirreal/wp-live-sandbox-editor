@@ -14,23 +14,18 @@
  * @package Live_Sandbox_Editor
  */
 
-/**
- * Remove target="_parent" from any anchor in each action HTML string.
- *
- * @param array $actions Action label => anchor HTML.
- * @return array
- */
 function lse_strip_parent_target_actions( $actions ) {
 	if ( ! is_array( $actions ) ) {
 		return $actions;
 	}
 	foreach ( $actions as $key => $html ) {
-		if ( ! is_string( $html ) || false === strpos( $html, '_parent' ) ) {
+		if ( ! is_string( $html ) || false === stripos( $html, '_parent' ) ) {
 			continue;
 		}
 		$p = new WP_HTML_Tag_Processor( $html );
 		while ( $p->next_tag( 'a' ) ) {
-			if ( '_parent' === $p->get_attribute( 'target' ) ) {
+			$target = $p->get_attribute( 'target' );
+			if ( is_string( $target ) && 0 === strcasecmp( $target, '_parent' ) ) {
 				$p->remove_attribute( 'target' );
 			}
 		}
@@ -39,20 +34,13 @@ function lse_strip_parent_target_actions( $actions ) {
 	return $actions;
 }
 
-foreach (
-	array(
-		'update_plugin_complete_actions',
-		'update_bulk_plugins_complete_actions',
-		'update_theme_complete_actions',
-		'update_bulk_theme_complete_actions',
-		'update_translations_complete_actions',
-		'install_plugin_complete_actions',
-		'install_plugin_overwrite_actions',
-		'install_theme_complete_actions',
-		'install_theme_overwrite_actions',
-		'theme_install_actions',
-	) as $lse_hook
-) {
-	add_filter( $lse_hook, 'lse_strip_parent_target_actions' );
-}
-unset( $lse_hook );
+add_filter( 'update_plugin_complete_actions', 'lse_strip_parent_target_actions' );
+add_filter( 'update_bulk_plugins_complete_actions', 'lse_strip_parent_target_actions' );
+add_filter( 'update_theme_complete_actions', 'lse_strip_parent_target_actions' );
+add_filter( 'update_bulk_theme_complete_actions', 'lse_strip_parent_target_actions' );
+add_filter( 'update_translations_complete_actions', 'lse_strip_parent_target_actions' );
+add_filter( 'install_plugin_complete_actions', 'lse_strip_parent_target_actions' );
+add_filter( 'install_plugin_overwrite_actions', 'lse_strip_parent_target_actions' );
+add_filter( 'install_theme_complete_actions', 'lse_strip_parent_target_actions' );
+add_filter( 'install_theme_overwrite_actions', 'lse_strip_parent_target_actions' );
+add_filter( 'theme_install_actions', 'lse_strip_parent_target_actions' );
