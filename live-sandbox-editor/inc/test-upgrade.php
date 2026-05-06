@@ -205,10 +205,10 @@ function print_themes_grid_script(): void {
 			link.href = href;
 			link.textContent = linkLabel;
 			link.setAttribute('data-lse-test-theme-upgrade', slug);
-			// themes.js delegates `click .update-message` to its own handler.
-			// Without stopPropagation the link click would trigger the AJAX
-			// update flow instead of navigating.
-			link.addEventListener('click', function(e) { e.stopPropagation(); });
+			// themes.js delegates `click .update-message` to its own handler;
+			// stop propagation so the link navigates instead of triggering
+			// the AJAX update flow.
+			link.setAttribute('onclick', 'event.stopPropagation()');
 
 			var parts = orFmt.split('%s');
 			p.appendChild(document.createElement('br'));
