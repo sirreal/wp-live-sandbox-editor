@@ -145,6 +145,12 @@
 		by host WordPress. Same `lse_` prefix convention.
 		-->
 		<exclude-pattern>./src/uploads-passthrough\.mu\.php$</exclude-pattern>
+		<!--
+		`src/iframe-target-fix.mu.php` is the same shape: a Playground
+		mu-plugin loaded only inside the sandbox to strip `target="_parent"`
+		from upgrader action links. Same `lse_` prefix convention.
+		-->
+		<exclude-pattern>./src/iframe-target-fix\.mu\.php$</exclude-pattern>
 	</rule>
 
 	<rule ref="WordPress.Files.FileName">
