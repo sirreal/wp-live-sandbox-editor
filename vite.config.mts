@@ -20,14 +20,20 @@ export default defineConfig({
 				main: 'src/main.ts',
 				setup: 'src/setup.ts',
 			},
-			// `@wordpress/interactivity` is provided at runtime by WordPress
-			// core as a script module; keep the bare specifier in the output
-			// so the host's import map resolves it instead of bundling it.
-			external: ['@wordpress/interactivity'],
+			/*
+			 * `@wordpress/interactivity` is provided at runtime by WordPress
+			 * core.
+			 * `@wp-playground/client` is expected to be served from playground.wordpress.net instead of bundled. It is the interface to the playground frame.
+			 */
+			external: ['@wordpress/interactivity', '@wp-playground/client'],
 			output: {
 				entryFileNames: '[name].js',
 				chunkFileNames: '[name]-[hash].js',
 				assetFileNames: '[name][extname]',
+				paths: {
+					'@wp-playground/client':
+						'https://playground.wordpress.net/client/index.js',
+				},
 				// Monaco's lazy language chunks (cssMode, tsMode, …) need a
 				// shared parent for monaco's eager core. With a single entry
 				// they'd otherwise import `./main.js`, which WP enqueues with
