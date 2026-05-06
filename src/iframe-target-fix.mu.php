@@ -14,6 +14,13 @@
  * @package Live_Sandbox_Editor
  */
 
+/**
+ * Strip `target="_parent"` from anchors in an upgrader/installer action list.
+ *
+ * @param array<string,string>|mixed $actions Action HTML keyed by slug.
+ *
+ * @return array<string,string>|mixed Filtered actions, or original value if not an array.
+ */
 function lse_strip_parent_target_actions( $actions ) {
 	if ( ! is_array( $actions ) ) {
 		return $actions;
