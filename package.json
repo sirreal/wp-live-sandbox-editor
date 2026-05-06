@@ -18,7 +18,7 @@
 		"monaco-editor": "^0.55.1"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.13",
+		"@biomejs/biome": "^2.4.14",
 		"@tsconfig/strictest": "^2.0.5",
 		"@wordpress/interactivity": "^6.45.0",
 		"typescript": "npm:@typescript/native-preview@beta",
