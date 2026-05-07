@@ -1,6 +1,7 @@
 import { getContext, store } from '@wordpress/interactivity';
 import type { PlaygroundClient } from '@wp-playground/client';
 import { initPlayground, type SyncManifest } from './playground.js';
+import type { TestUpgradeRequest } from './types.js';
 import { getAppData } from './types.js';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -35,6 +36,7 @@ interface SandboxStore {
 		boot(
 			iframe: HTMLIFrameElement,
 			manifestOverride?: SyncManifest,
+			testUpgrade?: TestUpgradeRequest,
 		): Generator<Promise<unknown>, PlaygroundClient | null>;
 	};
 }
@@ -175,6 +177,7 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 		*boot(
 			iframe: HTMLIFrameElement,
 			manifestOverride?: SyncManifest,
+			testUpgrade?: TestUpgradeRequest,
 		): Generator<Promise<unknown>, PlaygroundClient | null> {
 			const { scriptDebug, wpDebug } = getAppData();
 			try {
@@ -185,6 +188,7 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 					},
 					{ scriptDebug, wpDebug },
 					manifestOverride,
+					testUpgrade,
 				)) as PlaygroundClient;
 			} catch (err) {
 				sandbox.state.statusText = 'Playground failed to initialize.';
@@ -204,6 +208,26 @@ export const sandbox = store<SandboxStore>('live-sandbox-editor/sandbox', {
 				if (document.activeElement === input) return;
 				sandbox.state.url = path;
 			});
+
+			// Test-upgrade flow runs after the post-amble so the terminal
+			// status it sets isn't clobbered, and so the iframe refresh that
+			// applies post-import fixups happens before the upgrade dispatch
+			// renavigates.
+			if (testUpgrade) {
+				sandbox.state.statusText = 'Preparing upgrade test…';
+				const mod = (yield import(
+					'./test-upgrade.js'
+				)) as typeof import('./test-upgrade.js');
+				try {
+					yield mod.runTestUpgrade(client, testUpgrade, (s: string) => {
+						sandbox.state.statusText = s;
+					});
+				} catch (err) {
+					const message = err instanceof Error ? err.message : String(err);
+					sandbox.state.statusText = `Upgrade test failed: ${message}`;
+					console.error('[live-sandbox-editor] runTestUpgrade error:', err);
+				}
+			}
 
 			return client;
 		},
