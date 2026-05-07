@@ -1,5 +1,5 @@
 === Live Sandbox Editor ===
-Contributors: jonsurrell
+Contributors: jonsurrell, lucatume
 Tags: development, debug
 Requires at least: 6.8
 Tested up to: 6.9
