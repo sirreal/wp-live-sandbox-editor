@@ -13,31 +13,32 @@ use Live_Sandbox_Editor;
 
 /** Bootstraps the feature. Called from main plugin init(). */
 function init(): void {
-	add_action( 'admin_init', __NAMESPACE__ . '\\register_update_message_hooks' );
+	add_action( 'admin_init', __NAMESPACE__ . '\\register_plugin_update_message_hooks' );
 	add_action( 'admin_init', __NAMESPACE__ . '\\register_theme_update_message_hooks' );
 	add_filter( 'wp_prepare_themes_for_js', __NAMESPACE__ . '\\inject_theme_sandbox_links' );
 	add_action( 'admin_footer-themes.php', __NAMESPACE__ . '\\print_themes_grid_script' );
 }
 
 /**
- * One closure per entry that currently has an advertised update. Reading
- * the transient here (rather than per render) keeps the registration
- * idempotent and avoids running the inner closure for plugins that don't
- * apply.
+ * Read the named site transient and register one closure per item that has
+ * an advertised update under the given hook prefix. Reading the transient
+ * here (rather than per render) keeps registration idempotent and avoids
+ * running the inner closure for items that don't apply.
  */
-function register_update_message_hooks(): void {
+function register_per_item_update_hooks( string $transient, string $hook_prefix, callable $renderer ): void {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
 	}
-	$updates = get_site_transient( 'update_plugins' );
+	$updates = get_site_transient( $transient );
 	if ( ! is_object( $updates ) || empty( $updates->response ) || ! is_array( $updates->response ) ) {
 		return;
 	}
-	foreach ( array_keys( $updates->response ) as $entry ) {
+	foreach ( array_keys( $updates->response ) as $key ) {
+		$key = (string) $key;
 		add_action(
-			'in_plugin_update_message-' . $entry,
-			static function () use ( $entry ): void {
-				render_link( (string) $entry );
+			$hook_prefix . $key,
+			static function () use ( $key, $renderer ): void {
+				$renderer( $key );
 			},
 			10,
 			0
@@ -45,37 +46,34 @@ function register_update_message_hooks(): void {
 	}
 }
 
+function register_plugin_update_message_hooks(): void {
+	register_per_item_update_hooks(
+		'update_plugins',
+		'in_plugin_update_message-',
+		__NAMESPACE__ . '\\render_plugin_link'
+	);
+}
+
 /**
- * One closure per theme that currently has an advertised update.
- * `in_theme_update_message-{slug}` fires in the multisite network-admin
+ * `in_theme_update_message-{slug}` only fires in the multisite network-admin
  * themes list table (WP_MS_Themes_List_Table). Single-site installs use
  * inject_theme_sandbox_links() via wp_prepare_themes_for_js instead.
  */
 function register_theme_update_message_hooks(): void {
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! is_network_admin() ) {
 		return;
 	}
-	$updates = get_site_transient( 'update_themes' );
-	if ( ! is_object( $updates ) || empty( $updates->response ) || ! is_array( $updates->response ) ) {
-		return;
-	}
-	foreach ( array_keys( $updates->response ) as $slug ) {
-		add_action(
-			'in_theme_update_message-' . $slug,
-			static function () use ( $slug ): void {
-				render_theme_link( (string) $slug );
-			},
-			10,
-			0
-		);
-	}
+	register_per_item_update_hooks(
+		'update_themes',
+		'in_theme_update_message-',
+		__NAMESPACE__ . '\\render_theme_link'
+	);
 }
 
 /**
- * Filter wp_prepare_themes_for_js to append the sandbox link to each
- * theme's update HTML. Used for single-site installs where
- * in_theme_update_message-{slug} never fires (themes.php uses a
- * JavaScript-driven grid rather than a list table with PHP row hooks).
+ * Filter wp_prepare_themes_for_js to append the sandbox link to each theme's
+ * update HTML. themes.php's grid and the theme-detail overlay both render
+ * from this data, and neither has a per-card PHP hook.
  *
  * @param array<string,array<string,mixed>> $prepared_themes Theme data keyed by slug.
  * @return array<string,array<string,mixed>>
@@ -84,13 +82,19 @@ function inject_theme_sandbox_links( array $prepared_themes ): array {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return $prepared_themes;
 	}
+	$label = __( 'test the theme update in the sandbox', 'live-sandbox-editor' );
 	foreach ( $prepared_themes as $slug => &$theme_data ) {
 		if ( empty( $theme_data['hasUpdate'] ) || empty( $theme_data['update'] ) ) {
 			continue;
 		}
-		$link_html = build_theme_link_html( (string) $slug );
-		$suffix    = '</strong></p>';
-		$update    = (string) $theme_data['update'];
+		$link_html = build_link_html(
+			(string) $slug,
+			'testThemeUpgrade',
+			'data-lse-test-theme-upgrade',
+			$label
+		);
+		$suffix = '</strong></p>';
+		$update = (string) $theme_data['update'];
 		if ( str_ends_with( $update, $suffix ) ) {
 			$theme_data['update'] = substr( $update, 0, -strlen( $suffix ) ) . $link_html . $suffix;
 		}
@@ -99,64 +103,56 @@ function inject_theme_sandbox_links( array $prepared_themes ): array {
 	return $prepared_themes;
 }
 
-/**
- * Echo the plugin sandbox link inside the update-message paragraph.
- */
-function render_link( string $entry ): void {
-	$run_url = menu_page_url( Live_Sandbox_Editor\SLUG, false );
-	$href    = add_query_arg( 'testUpgrade', $entry, $run_url );
-	$label   = __( 'test the plugin update in the sandbox', 'live-sandbox-editor' );
-
-	printf(
-		/* translators: %s: link to test the update in the Live Sandbox Editor. */
-		'<br>' . esc_html__( 'Or %s.', 'live-sandbox-editor' ),
-		sprintf(
-			'<a href="%s" class="lse-test-upgrade-link" data-lse-test-upgrade="%s">%s</a>',
-			esc_url( $href ),
-			esc_attr( $entry ),
-			esc_html( $label )
-		)
-	);
+function render_plugin_link( string $entry ): void {
+	echo wp_kses_post( build_link_html(
+		$entry,
+		'testUpgrade',
+		'data-lse-test-upgrade',
+		__( 'test the plugin update in the sandbox', 'live-sandbox-editor' )
+	) );
 }
 
-/**
- * Echo the theme sandbox link (used by in_theme_update_message-{slug} on
- * multisite network-admin themes page).
- */
 function render_theme_link( string $slug ): void {
-	echo wp_kses_post( build_theme_link_html( $slug ) );
+	echo wp_kses_post( build_link_html(
+		$slug,
+		'testThemeUpgrade',
+		'data-lse-test-theme-upgrade',
+		__( 'test the theme update in the sandbox', 'live-sandbox-editor' )
+	) );
 }
 
 /**
- * Build the sandbox-link HTML fragment to append to a theme update notice.
+ * Build the "Or {link}." sandbox-link HTML fragment to append to an update
+ * notice. The leading <br> breaks it onto its own line below the standard
+ * "View version X details" / "update now" links so the sandbox-test offer
+ * reads as a distinct alternative.
  */
-function build_theme_link_html( string $slug ): string {
+function build_link_html( string $key, string $query_arg, string $data_attr, string $label ): string {
 	$run_url = menu_page_url( Live_Sandbox_Editor\SLUG, false );
-	$href    = add_query_arg( 'testThemeUpgrade', $slug, $run_url );
-	$label   = __( 'test the theme update in the sandbox', 'live-sandbox-editor' );
+	$href    = add_query_arg( $query_arg, $key, $run_url );
 
 	return '<br>' . sprintf(
 		/* translators: %s: link to test the update in the Live Sandbox Editor. */
 		esc_html__( 'Or %s.', 'live-sandbox-editor' ),
 		sprintf(
-			'<a href="%s" class="lse-test-upgrade-link" data-lse-test-theme-upgrade="%s">%s</a>',
+			'<a href="%s" class="lse-test-upgrade-link" %s="%s">%s</a>',
 			esc_url( $href ),
-			esc_attr( $slug ),
+			esc_attr( $data_attr ),
+			esc_attr( $key ),
 			esc_html( $label )
 		)
 	);
 }
 
 /**
- * Inject the sandbox link into per-card update notices on themes.php.
- *
- * The card-level "New version available." notice is rendered inline by
- * themes.php (no per-card PHP hook), and the JS template re-renders cards
- * on Backbone model changes — so this script (a) walks initial DOM after
- * load and (b) reapplies via MutationObserver. WordPress's themes.js
- * delegates `click .update-message` to its own `updateTheme` handler, so
- * the injected link calls `stopPropagation` to keep the click from being
- * hijacked into the AJAX-update flow.
+ * themes.php's per-card "New version available." notice is rendered by a JS
+ * Backbone template, so there's no per-card PHP hook to attach to. This
+ * script (a) walks the initial DOM after load, (b) re-applies on subtree
+ * mutation (re-renders), and (c) installs a single capture-phase click
+ * handler that stops propagation for every .lse-test-upgrade-link — without
+ * that, themes.js's delegated `click .update-message` handler hijacks the
+ * link into the AJAX-update flow. The capture-phase listener also covers
+ * PHP-filter-injected anchors that the DOM-walk skips as already-present.
  */
 function print_themes_grid_script(): void {
 	if ( ! current_user_can( 'manage_options' ) ) {
@@ -180,9 +176,19 @@ function print_themes_grid_script(): void {
 		var linkLabel = <?php echo wp_json_encode( $label ); ?>;
 		var orFmt = <?php echo wp_json_encode( $or_label ); ?>;
 
+		// Capture-phase listener fires before themes.js's bubble-phase
+		// delegation on `.update-message`, covering both JS-injected cards
+		// and PHP-filter-injected anchors uniformly.
+		document.addEventListener('click', function(e) {
+			var t = e.target;
+			if (t && t.closest && t.closest('a.lse-test-upgrade-link')) {
+				e.stopPropagation();
+			}
+		}, true);
+
 		function slugFor(card) {
-			// JS-rendered cards have data-slug; PHP-rendered cards expose the
-			// slug via the theme-name id ("{slug}-name").
+			// JS-rendered cards have data-slug; PHP-rendered cards expose
+			// the slug via the theme-name id ("{slug}-name").
 			var slug = card.getAttribute('data-slug');
 			if (slug) return slug;
 			var name = card.querySelector('.theme-name[id$="-name"]');
@@ -205,10 +211,6 @@ function print_themes_grid_script(): void {
 			link.href = href;
 			link.textContent = linkLabel;
 			link.setAttribute('data-lse-test-theme-upgrade', slug);
-			// themes.js delegates `click .update-message` to its own handler;
-			// stop propagation so the link navigates instead of triggering
-			// the AJAX update flow.
-			link.setAttribute('onclick', 'event.stopPropagation()');
 
 			var parts = orFmt.split('%s');
 			p.appendChild(document.createElement('br'));
@@ -230,13 +232,27 @@ function print_themes_grid_script(): void {
 		// themes.js's main render path empties `.wrap` and appends a fresh
 		// `.themes` container, so the original `.themes` node we'd observe
 		// gets detached. Observe `#wpbody-content` (a stable ancestor) and
-		// re-process on any subtree change.
+		// re-process. rAF-coalesce because themes.js fires many small
+		// mutations per render (search-as-you-type, modal open/close).
 		var container = document.getElementById('wpbody-content') || document.body;
 		if (container && typeof MutationObserver === 'function') {
-			new MutationObserver(processAll).observe(container, {
-				childList: true,
-				subtree: true,
-			});
+			var pending = false;
+			var schedule = function() {
+				if (pending) return;
+				pending = true;
+				requestAnimationFrame(function() {
+					pending = false;
+					processAll();
+				});
+			};
+			new MutationObserver(function(records) {
+				for (var i = 0; i < records.length; i++) {
+					if (records[i].addedNodes && records[i].addedNodes.length) {
+						schedule();
+						return;
+					}
+				}
+			}).observe(container, { childList: true, subtree: true });
 		}
 	})();
 	</script>
