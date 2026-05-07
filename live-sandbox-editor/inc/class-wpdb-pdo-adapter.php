@@ -48,7 +48,7 @@ class Wpdb_Pdo_Adapter {
 		$charset = ( isset( $wpdb->charset ) && '' !== $wpdb->charset ) ? $wpdb->charset : 'utf8mb4';
 		// phpcs:ignore WordPress.DB.RestrictedFunctions.mysql_mysqli_set_charset -- intentional: wpdb's $charset reflects the desired connection charset, but on hosts where wpdb didn't get to call set_charset() we still need to pin it so mysqli_real_escape_string() is well-defined.
 		if ( ! \mysqli_set_charset( $wpdb->dbh, $charset ) ) {
-			throw new \PDOException( 'Wpdb_Pdo_Adapter could not set connection charset to ' . $charset . '.' );
+			throw new \PDOException( 'Wpdb_Pdo_Adapter could not set connection charset to ' . $charset . '.' ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- $charset is a trusted wpdb property value, not user input; exception messages are for server-side logging only.
 		}
 
 		// Reject session modes that invalidate the assumptions baked into
@@ -69,7 +69,7 @@ class Wpdb_Pdo_Adapter {
 		$mode = (string) $rows[0][0];
 		foreach ( array( 'NO_BACKSLASH_ESCAPES', 'ANSI_QUOTES' ) as $forbidden ) {
 			if ( false !== stripos( $mode, $forbidden ) ) {
-				throw new \PDOException( 'Wpdb_Pdo_Adapter cannot run with ' . $forbidden . ' sql_mode.' );
+				throw new \PDOException( 'Wpdb_Pdo_Adapter cannot run with ' . $forbidden . ' sql_mode.' ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- $forbidden is a hardcoded string from a known array, not user input; exception messages are for server-side logging only.
 			}
 		}
 
@@ -114,6 +114,6 @@ class Wpdb_Pdo_Adapter {
 	 *                       through the existing PDOException handlers.
 	 */
 	public function __call( string $name, array $args ) {
-		throw new \PDOException( 'Wpdb_Pdo_Adapter does not implement ' . $name . '()' );
+		throw new \PDOException( 'Wpdb_Pdo_Adapter does not implement ' . $name . '()' ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- $name is a PHP method name from __call, not user input; exception messages are for server-side logging only.
 	}
 }

@@ -195,7 +195,7 @@ class Wpdb_Pdo_Statement {
 	/**
 	 * @return array<string,mixed>|false Next row, or false when exhausted.
 	 */
-	public function fetch( int $mode = \PDO::FETCH_ASSOC ) {
+	public function fetch( int $mode = \PDO::FETCH_ASSOC ) { // phpcs:ignore WordPress.DB.RestrictedClasses.mysql__PDO -- intentional: this class is a PDO compatibility wrapper; using PDO constants to match the interface contract.
 		if ( $this->position >= count( $this->rows ) ) {
 			return false;
 		}
@@ -224,7 +224,7 @@ class Wpdb_Pdo_Statement {
 	 *                              from the PHP type and the producer never
 	 *                              reads it back.
 	 */
-	public function bindValue( $parameter, $value, int $type = \PDO::PARAM_STR ): bool {
+	public function bindValue( $parameter, $value, int $type = \PDO::PARAM_STR ): bool { // phpcs:ignore WordPress.DB.RestrictedClasses.mysql__PDO -- intentional: this class is a PDO compatibility wrapper; using PDO constants to match the interface contract.
 		if ( null === $this->bound_params ) {
 			$this->bound_params = array();
 		}
@@ -237,6 +237,6 @@ class Wpdb_Pdo_Statement {
 	 * @throws \PDOException Always.
 	 */
 	public function __call( string $name, array $args ) {
-		throw new \PDOException( 'Wpdb_Pdo_Statement does not implement ' . $name . '()' );
+		throw new \PDOException( 'Wpdb_Pdo_Statement does not implement ' . $name . '()' ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- $name is a PHP method name from __call, not user input; exception messages are for server-side logging only.
 	}
 }

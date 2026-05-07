@@ -14,6 +14,7 @@ namespace Live_Sandbox_Editor;
 
 \defined( 'ABSPATH' ) || exit;
 
+// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- template-local variable, only used within this included template file.
 $theme_options = array(
 	array(
 		'value'    => 'system',
@@ -32,6 +33,7 @@ $theme_options = array(
 	),
 );
 
+// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- template-local variable, only used within this included template file.
 $quick_links = array(
 	array(
 		'label' => __( 'Homepage', 'live-sandbox-editor' ),
@@ -138,7 +140,7 @@ $quick_links = array(
 						role="radiogroup"
 						aria-label="<?php esc_attr_e( 'Editor theme', 'live-sandbox-editor' ); ?>"
 					>
-						<?php foreach ( $theme_options as $option ) : ?>
+						<?php foreach ( $theme_options as $option ) : // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- template-local loop variable, only used within this included template file. ?>
 							<button
 								type="button"
 								role="radio"

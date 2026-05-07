@@ -16,6 +16,8 @@
 
 namespace Live_Sandbox_Editor;
 
+\defined( 'ABSPATH' ) || exit;
+
 use FileTreeProducer;
 use WP_REST_Request;
 use WordPress\DataLiberation\MySQLDumpProducer;

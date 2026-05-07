@@ -22,6 +22,8 @@
 
 namespace Live_Sandbox_Editor\Sync_Stream;
 
+\defined( 'ABSPATH' ) || exit;
+
 const MARKER_FILE = 'FILE';
 const MARKER_SQL  = 'SQL';
 const MARKER_END  = 'END';
