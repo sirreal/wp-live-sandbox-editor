@@ -168,18 +168,23 @@ function page_for_screen( string $hook_or_screen_id ): ?string {
  */
 function app_data( array $data ): array {
 	$extras = array(
-		'restUrl'     => rest_url( SLUG . '/v1' ),
-		'nonce'       => wp_create_nonce( 'wp_rest' ),
-		'siteUrl'     => get_site_url(),
-		'runUrl'      => menu_page_url( SLUG, false ),
-		'scriptDebug' => defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG,
-		'wpDebug'     => defined( 'WP_DEBUG' ) && WP_DEBUG,
+		'restUrl'        => rest_url( SLUG . '/v1' ),
+		'nonce'          => wp_create_nonce( 'wp_rest' ),
+		'siteUrl'        => get_site_url(),
+		'runUrl'         => menu_page_url( SLUG, false ),
+		'scriptDebug'    => defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG,
+		'wpDebug'        => defined( 'WP_DEBUG' ) && WP_DEBUG,
 		// Major.minor only — Playground's blueprint `preferredVersions`
 		// accepts that shape plus 'latest'/'beta'/'nightly', not full
 		// patches. Sandbox boots on the host's WP+PHP series so admin
 		// chrome, list-table HTML, and available APIs match.
-		'wpVersion'   => normalize_version( $GLOBALS['wp_version'] ?? '' ),
-		'phpVersion'  => normalize_version( PHP_VERSION ),
+		'wpVersion'      => normalize_version( $GLOBALS['wp_version'] ?? '' ),
+		'phpVersion'     => normalize_version( PHP_VERSION ),
+		// JS consumers (pre-sync cleanup) need to know LSE's own
+		// directory name so they don't prune it. SLUG is the canonical
+		// host-side identifier — sharing it keeps that single source of
+		// truth.
+		'selfPluginSlug' => SLUG,
 	);
 
 	// When the Run page is reached via a "test … in sandbox" link, lift

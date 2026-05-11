@@ -31,6 +31,9 @@ export interface AppData {
 	// Playground's defaults in that case.
 	wpVersion: string;
 	phpVersion: string;
+	// Host-side LSE plugin slug (mirror of the PHP `SLUG` constant).
+	// Pre-sync cleanup uses it to self-protect the LSE directory.
+	selfPluginSlug: string;
 	testPluginUpgradePayload?: TestPluginUpgradePayload;
 	testThemeUpgradePayload?: TestThemeUpgradePayload;
 }

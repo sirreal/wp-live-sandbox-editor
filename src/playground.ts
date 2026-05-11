@@ -14,12 +14,6 @@ import uploadsPassthroughMuPhp from './uploads-passthrough.mu.php?raw';
 
 const FIXUPS_PATH = '/tmp/lse-fixups.php';
 
-// Mirror of the host-side `Live_Sandbox_Editor\SLUG` (live-sandbox-editor.php).
-// Used to self-protect the LSE plugin's own directory from any pre-sync
-// cleanup that prunes Playground's bundled defaults.
-const LSE_SLUG = 'live-sandbox-editor';
-const LSE_MAIN_FILE = `${LSE_SLUG}.php`;
-
 export interface DebugSettings {
 	scriptDebug: boolean;
 	wpDebug: boolean;
@@ -249,11 +243,12 @@ async function cleanupPlaygroundDefaults(
 	}
 
 	const docroot = await client.documentRoot;
+	const { selfPluginSlug } = getAppData();
 
 	// Plugin manifest entries are `slug/main.php` (multi-file) or
 	// `single.php` (single-file). Top-level basename is the part
 	// before the slash, or the whole entry for single-file. The
-	// `index.php` is WP's silence stub; the LSE entries are
+	// `index.php` is WP's silence stub; the self-plugin entries are
 	// defense-in-depth (sync already excludes self).
 	const pluginAllow = new Set<string>([
 		...manifest.plugins.map((e) => {
@@ -261,13 +256,13 @@ async function cleanupPlaygroundDefaults(
 			return slash === -1 ? e : e.slice(0, slash);
 		}),
 		'index.php',
-		LSE_SLUG,
-		LSE_MAIN_FILE,
+		selfPluginSlug,
+		`${selfPluginSlug}.php`,
 	]);
 	const themeAllow = new Set<string>([
 		...manifest.themes,
 		'index.php',
-		LSE_SLUG,
+		selfPluginSlug,
 	]);
 
 	const pluginAllowPhp = phpArrayLiteral([...pluginAllow]);
