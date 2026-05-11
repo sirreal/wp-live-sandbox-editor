@@ -173,6 +173,15 @@ function inject_theme_sandbox_links( array $prepared_themes ): array {
 			continue;
 		}
 		$update = (string) $theme_data['update'];
+		// Core renders `update` with an `action=upgrade-theme` anchor only
+		// when the update is actionable (package present, compatible_wp +
+		// compatible_php true). Incompatible-update notices render as a
+		// plain `<p>` describing the version mismatch with no action. Skip
+		// those — we'd otherwise offer a sandbox test for an update the
+		// host install would itself refuse to run.
+		if ( false === strpos( $update, 'action=upgrade-theme' ) ) {
+			continue;
+		}
 		// If a previous filter pass (or upstream code) has already inserted
 		// our anchor, skip — re-running the regex below would stack a second
 		// `<br>` + link before `</p>`.
@@ -284,8 +293,18 @@ function enqueue_themes_grid_module( string $hook_suffix ): void {
 	}
 	$run_url = get_run_page_url();
 	$hrefs   = array();
-	foreach ( array_keys( $updates->response ) as $slug ) {
+	foreach ( $updates->response as $slug => $r ) {
+		// Skip rows core won't render an upgrade action for: empty
+		// `package` (nothing to install) means themes.php displays a
+		// version-mismatch notice with no upgrade button, so a sandbox
+		// link would dangle.
+		if ( ! is_array( $r ) || empty( $r['package'] ) ) {
+			continue;
+		}
 		$hrefs[ (string) $slug ] = add_query_arg( 'testThemeUpgrade', $slug, $run_url );
+	}
+	if ( empty( $hrefs ) ) {
+		return;
 	}
 	$label = __( 'Click here to test the new version before you upgrade.', 'live-sandbox-editor' );
 

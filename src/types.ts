@@ -34,9 +34,6 @@ export interface AppData {
 	// Host-side LSE plugin slug (mirror of the PHP `SLUG` constant).
 	// Pre-sync cleanup uses it to self-protect the LSE directory.
 	selfPluginSlug: string;
-	// Admin URL path (e.g. "/wp-admin/") from PHP `admin_url()`, used
-	// by JS callers that build admin URLs without hardcoding the prefix.
-	adminPath: string;
 	testPluginUpgradePayload?: TestPluginUpgradePayload;
 	testThemeUpgradePayload?: TestThemeUpgradePayload;
 }

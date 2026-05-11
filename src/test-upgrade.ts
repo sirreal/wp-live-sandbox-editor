@@ -1,9 +1,8 @@
 import type { PlaygroundClient } from '@wp-playground/client';
 import { phpStringLiteral } from './playground.js';
-import {
-	getAppData,
-	type TestPluginUpgradePayload,
-	type TestThemeUpgradePayload,
+import type {
+	TestPluginUpgradePayload,
+	TestThemeUpgradePayload,
 } from './types.js';
 
 interface UpgradeKind {
@@ -23,16 +22,21 @@ interface UpgradeKind {
 	notFoundError: string;
 }
 
+// Paths are absolute relative to Playground's docroot, which always serves
+// admin at `/wp-admin/`. The host's `admin_url()` is irrelevant here:
+// hosts running in a subdirectory (e.g. `/wp/wp-admin/`) would otherwise
+// produce paths that don't exist inside Playground.
+const PG_ADMIN = '/wp-admin/';
+
 export async function runTestPluginUpgrade(
 	client: PlaygroundClient,
 	payload: TestPluginUpgradePayload,
 	onStatus: (status: string) => void,
 ): Promise<void> {
-	const { adminPath } = getAppData();
 	await runUpgrade(
 		client,
 		{
-			listingPath: `${adminPath}plugins.php`,
+			listingPath: `${PG_ADMIN}plugins.php`,
 			action: 'upgrade-plugin',
 			keyParam: 'plugin',
 			keyValue: payload.plugin,
@@ -48,11 +52,10 @@ export async function runTestThemeUpgrade(
 	payload: TestThemeUpgradePayload,
 	onStatus: (status: string) => void,
 ): Promise<void> {
-	const { adminPath } = getAppData();
 	await runUpgrade(
 		client,
 		{
-			listingPath: `${adminPath}themes.php`,
+			listingPath: `${PG_ADMIN}themes.php`,
 			action: 'upgrade-theme',
 			keyParam: 'theme',
 			keyValue: payload.slug,
@@ -106,7 +109,6 @@ async function findUpgradeUrl(
 	client: PlaygroundClient,
 	kind: UpgradeKind,
 ): Promise<string> {
-	const { adminPath } = getAppData();
 	const docroot = await client.documentRoot;
 
 	await installInterceptor(client, docroot);
@@ -128,12 +130,12 @@ async function findUpgradeUrl(
 	const selector = `a[href*="action=${kind.action}"]`;
 	for (const a of doc.querySelectorAll(selector)) {
 		const tail = matchUpdatePath(a.getAttribute('href') ?? '', kind);
-		if (tail) return `${adminPath}${tail}`;
+		if (tail) return `${PG_ADMIN}${tail}`;
 	}
 
 	if (kind.action === 'upgrade-theme') {
 		const tail = findInBackboneThemeData(doc, kind, selector);
-		if (tail) return `${adminPath}${tail}`;
+		if (tail) return `${PG_ADMIN}${tail}`;
 	}
 
 	throw new Error(kind.notFoundError);
