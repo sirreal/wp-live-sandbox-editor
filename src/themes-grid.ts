@@ -48,23 +48,40 @@ function install({ hrefs, label }: ThemesGridData): void {
 	}
 
 	function append(card: Element): void {
-		// `.notice-warning .update-message` is what themes.php renders for
-		// actionable "New version available" rows. Incompatibility messages
-		// use `.notice-error .update-message` and have no upgrade action —
-		// scoping the selector keeps us off those.
-		const msg = card.querySelector('.notice-warning .update-message');
+		// themes.php's tmpl-theme renders the actionable update notice as a
+		// single `<div class="update-message notice inline notice-warning
+		// notice-alt">` — both classes on the same element. Compound
+		// selector (no space) is required; a descendant combinator misses
+		// the element entirely. Incompatibility notices use
+		// `.update-message.notice-error` instead, so this filter still
+		// excludes them.
+		const msg = card.querySelector('.update-message.notice-warning');
 		if (!msg) return;
 		if (msg.querySelector('.lse-test-upgrade-link')) return;
 		const p = msg.querySelector('p');
 		if (!p) return;
 		const slug = slugFor(card);
 		if (!slug) return;
-		const href = hrefs[slug];
-		if (!href) return;
+		const rawHref = hrefs[slug];
+		if (!rawHref) return;
+		// `rawHref` is host-emitted (`admin_url()` + add_query_arg), so it
+		// should always be http(s). Validate before assigning to a live
+		// `<a href>` so a tampered script-module-data filter can't slip in
+		// a `javascript:` URI — and so CodeQL's "DOM text reinterpreted as
+		// HTML" check on text→href flow has nothing to flag.
+		let safeHref: URL;
+		try {
+			safeHref = new URL(rawHref, window.location.origin);
+		} catch {
+			return;
+		}
+		if (safeHref.protocol !== 'http:' && safeHref.protocol !== 'https:') {
+			return;
+		}
 
 		const link = document.createElement('a');
 		link.className = 'lse-test-upgrade-link';
-		link.href = href;
+		link.href = safeHref.toString();
 		link.textContent = label;
 		link.setAttribute('data-lse-test-theme-upgrade', slug);
 

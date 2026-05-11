@@ -134,7 +134,7 @@ async function findUpgradeUrl(
 	}
 
 	if (kind.action === 'upgrade-theme') {
-		const tail = findInBackboneThemeData(doc, kind, selector);
+		const tail = findInBackboneThemeData(doc, kind);
 		if (tail) return `${PG_ADMIN}${tail}`;
 	}
 
@@ -156,7 +156,6 @@ function matchUpdatePath(href: string, kind: UpgradeKind): string | null {
 function findInBackboneThemeData(
 	doc: Document,
 	kind: UpgradeKind,
-	selector: string,
 ): string | null {
 	for (const script of doc.querySelectorAll('script')) {
 		const text = script.textContent ?? '';
@@ -175,9 +174,14 @@ function findInBackboneThemeData(
 		if (!Array.isArray(themes)) continue;
 		const theme = themes.find((t) => t.id === kind.keyValue);
 		if (!theme || typeof theme.update !== 'string') continue;
-		const frag = new DOMParser().parseFromString(theme.update, 'text/html');
-		for (const a of frag.querySelectorAll(selector)) {
-			const tail = matchUpdatePath(a.getAttribute('href') ?? '', kind);
+		// `theme.update` is a small `<p>…<a href="update.php?…">…</a></p>`
+		// fragment. Pulling the href via regex (after decoding the two
+		// entities WP's `esc_url` may emit for `&`) avoids re-parsing
+		// JSON-derived text as HTML — a pattern CodeQL flags as a
+		// text→HTML XSS sink even though we only read the matched URL.
+		const decoded = theme.update.replace(/&(?:amp|#038);/g, '&');
+		for (const m of decoded.matchAll(/href=["']([^"']+)["']/gi)) {
+			const tail = matchUpdatePath(m[1] ?? '', kind);
 			if (tail) return tail;
 		}
 	}
