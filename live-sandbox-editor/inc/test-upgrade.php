@@ -20,6 +20,78 @@ function init(): void {
 }
 
 /**
+ * Return the host's update payload for the given plugin entry, or null if
+ * the host's `update_plugins` site_transient doesn't have a response row
+ * for it. Caller (Run-page enqueue) lifts this into AppData so Playground
+ * can seed its own transient instead of hitting api.wordpress.org.
+ *
+ * @return array{plugin:string,slug:string,new_version:string,package:string,url:string}|null
+ */
+function get_plugin_update_payload( string $entry ): ?array {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return null;
+	}
+	$updates = get_site_transient( 'update_plugins' );
+	if ( ! is_object( $updates ) || empty( $updates->response ) || ! is_array( $updates->response ) ) {
+		return null;
+	}
+	if ( ! isset( $updates->response[ $entry ] ) ) {
+		return null;
+	}
+	$r = $updates->response[ $entry ];
+	// Plugin response rows are objects in modern WP, but older transient
+	// shapes (or hand-built ones from filters) can be arrays. Accept both.
+	$get = static function ( $key, string $default = '' ) use ( $r ): string {
+		if ( is_object( $r ) && isset( $r->$key ) ) {
+			return (string) $r->$key;
+		}
+		if ( is_array( $r ) && isset( $r[ $key ] ) ) {
+			return (string) $r[ $key ];
+		}
+		return $default;
+	};
+	$slug = $get( 'slug' );
+	if ( '' === $slug ) {
+		// Best-effort fallback when the response row lacks an explicit slug:
+		// the plugin folder name is what `w.org/plugins/{slug}` is keyed on.
+		$slug = str_contains( $entry, '/' ) ? explode( '/', $entry, 2 )[0] : '';
+	}
+	return array(
+		'plugin'      => $entry,
+		'slug'        => $slug,
+		'new_version' => $get( 'new_version' ),
+		'package'     => $get( 'package' ),
+		'url'         => $get( 'url' ),
+	);
+}
+
+/**
+ * Return the host's update payload for the given theme slug, or null.
+ * Theme entries in `update_themes->response` are arrays (not objects).
+ *
+ * @return array{slug:string,new_version:string,package:string,url:string}|null
+ */
+function get_theme_update_payload( string $slug ): ?array {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return null;
+	}
+	$updates = get_site_transient( 'update_themes' );
+	if ( ! is_object( $updates ) || empty( $updates->response ) || ! is_array( $updates->response ) ) {
+		return null;
+	}
+	if ( empty( $updates->response[ $slug ] ) || ! is_array( $updates->response[ $slug ] ) ) {
+		return null;
+	}
+	$r = $updates->response[ $slug ];
+	return array(
+		'slug'        => $slug,
+		'new_version' => isset( $r['new_version'] ) ? (string) $r['new_version'] : '',
+		'package'     => isset( $r['package'] ) ? (string) $r['package'] : '',
+		'url'         => isset( $r['url'] ) ? (string) $r['url'] : '',
+	);
+}
+
+/**
  * Read the named site transient and register one closure per item that has
  * an advertised update under the given hook prefix. Reading the transient
  * here (rather than per render) keeps registration idempotent and avoids

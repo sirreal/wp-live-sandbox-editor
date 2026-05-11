@@ -1,6 +1,10 @@
 import { initApp } from './app.js';
 import type { SyncManifest } from './playground.js';
-import type { TestThemeUpgradeRequest, TestUpgradeRequest } from './types.js';
+import type {
+	TestPluginUpgradePayload,
+	TestThemeUpgradePayload,
+} from './types.js';
+import { getAppData } from './types.js';
 
 function parseManifestParam(): SyncManifest | undefined {
 	const raw = new URLSearchParams(window.location.search).get('manifest');
@@ -28,7 +32,7 @@ function parseManifestParam(): SyncManifest | undefined {
 	return parsed as SyncManifest;
 }
 
-function parseTestUpgradeParam(): TestUpgradeRequest | undefined {
+function parseTestPluginUpgrade(): TestPluginUpgradePayload | undefined {
 	const raw = new URLSearchParams(window.location.search).get('testUpgrade');
 	if (!raw) return undefined;
 	// Mirror is_safe_plugin_entry on the PHP side; defence in depth before
@@ -45,10 +49,21 @@ function parseTestUpgradeParam(): TestUpgradeRequest | undefined {
 			return undefined;
 		}
 	}
-	return { entry: raw };
+	// The payload (lifted from the host's update_plugins transient at
+	// enqueue time) carries everything Playground needs to render the
+	// upgrade notice — without it the upgrade flow can't proceed, so we
+	// only return when the URL trigger and the AppData payload agree.
+	const payload = getAppData().testPluginUpgradePayload;
+	if (!payload || payload.plugin !== raw) {
+		console.warn(
+			'[live-sandbox-editor] testUpgrade URL present but no matching payload in AppData; ignoring.',
+		);
+		return undefined;
+	}
+	return payload;
 }
 
-function parseTestThemeUpgradeParam(): TestThemeUpgradeRequest | undefined {
+function parseTestThemeUpgrade(): TestThemeUpgradePayload | undefined {
 	const raw = new URLSearchParams(window.location.search).get(
 		'testThemeUpgrade',
 	);
@@ -60,7 +75,14 @@ function parseTestThemeUpgradeParam(): TestThemeUpgradeRequest | undefined {
 		);
 		return undefined;
 	}
-	return { slug: raw };
+	const payload = getAppData().testThemeUpgradePayload;
+	if (!payload || payload.slug !== raw) {
+		console.warn(
+			'[live-sandbox-editor] testThemeUpgrade URL present but no matching payload in AppData; ignoring.',
+		);
+		return undefined;
+	}
+	return payload;
 }
 
 const root = document.getElementById('live-sandbox-editor-root');
@@ -70,8 +92,8 @@ if (!root) {
 	initApp(
 		root,
 		parseManifestParam(),
-		parseTestUpgradeParam(),
-		parseTestThemeUpgradeParam(),
+		parseTestPluginUpgrade(),
+		parseTestThemeUpgrade(),
 	).catch((err: unknown) => {
 		console.error('[live-sandbox-editor] App init failed:', err);
 	});

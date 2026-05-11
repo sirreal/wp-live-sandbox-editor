@@ -167,17 +167,45 @@ function page_for_screen( string $hook_or_screen_id ): ?string {
  * @return array<string,mixed>
  */
 function app_data( array $data ): array {
-	return array_merge(
-		$data,
-		array(
-			'restUrl'     => rest_url( SLUG . '/v1' ),
-			'nonce'       => wp_create_nonce( 'wp_rest' ),
-			'siteUrl'     => get_site_url(),
-			'runUrl'      => menu_page_url( SLUG, false ),
-			'scriptDebug' => defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG,
-			'wpDebug'     => defined( 'WP_DEBUG' ) && WP_DEBUG,
-		)
+	$extras = array(
+		'restUrl'     => rest_url( SLUG . '/v1' ),
+		'nonce'       => wp_create_nonce( 'wp_rest' ),
+		'siteUrl'     => get_site_url(),
+		'runUrl'      => menu_page_url( SLUG, false ),
+		'scriptDebug' => defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG,
+		'wpDebug'     => defined( 'WP_DEBUG' ) && WP_DEBUG,
 	);
+
+	// When the Run page is reached via a "test … in sandbox" link, lift
+	// the host's update_{plugins,themes} response row for the targeted
+	// item into AppData. Playground writes a synthetic transient with
+	// these fields (see src/test-upgrade.ts) so the upgrade notice + nonce
+	// render against the just-synced filesystem without hitting
+	// api.wordpress.org from inside the sandbox — that endpoint round-trip
+	// has been observed to silently fail for themes-update-check.
+	//
+	// phpcs:disable WordPress.Security.NonceVerification.Recommended -- The Run page is gated by `manage_options` (asserted again inside Test_Upgrade\get_*_update_payload), and the read $_GET values are constrained to the safe-charset matchers below before they reach any other code.
+	if ( isset( $_GET['testUpgrade'] ) && is_string( $_GET['testUpgrade'] ) ) {
+		$entry = sanitize_text_field( wp_unslash( $_GET['testUpgrade'] ) );
+		if ( Manifest\is_safe_plugin_entry( $entry ) ) {
+			$payload = Test_Upgrade\get_plugin_update_payload( $entry );
+			if ( null !== $payload ) {
+				$extras['testPluginUpgradePayload'] = $payload;
+			}
+		}
+	}
+	if ( isset( $_GET['testThemeUpgrade'] ) && is_string( $_GET['testThemeUpgrade'] ) ) {
+		$slug = sanitize_text_field( wp_unslash( $_GET['testThemeUpgrade'] ) );
+		if ( Manifest\is_safe_theme_slug( $slug ) ) {
+			$payload = Test_Upgrade\get_theme_update_payload( $slug );
+			if ( null !== $payload ) {
+				$extras['testThemeUpgradePayload'] = $payload;
+			}
+		}
+	}
+	// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+	return array_merge( $data, $extras );
 }
 
 /**
