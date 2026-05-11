@@ -180,7 +180,7 @@ function app_data( array $data ): array {
 		// patches. Sandbox boots on the host's WP+PHP series so admin
 		// chrome, list-table HTML, and available APIs match.
 		'wpVersion'      => normalize_version( $GLOBALS['wp_version'] ?? '' ),
-		'phpVersion'     => normalize_version( PHP_VERSION ),
+		'phpVersion'     => playground_php_version( PHP_VERSION ),
 		// JS consumers (pre-sync cleanup) need to know LSE's own
 		// directory name so they don't prune it. SLUG is the canonical
 		// host-side identifier — sharing it keeps that single source of
@@ -234,6 +234,18 @@ function app_data( array $data ): array {
  */
 function normalize_version( string $raw ): string {
 	return preg_match( '/^(\d+\.\d+)/', $raw, $m ) ? $m[1] : '';
+}
+
+/**
+ * Like `normalize_version()` but constrained to PHP series Playground's
+ * blueprint accepts. Anything outside the allowlist (e.g. a host on a
+ * future or dev build) returns '' so the JS side falls back to its
+ * default — preventing a hard boot error from a one-off host version.
+ */
+function playground_php_version( string $raw ): string {
+	$mm      = normalize_version( $raw );
+	$allowed = array( '7.0', '7.1', '7.2', '7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4' );
+	return in_array( $mm, $allowed, true ) ? $mm : '';
 }
 
 /**

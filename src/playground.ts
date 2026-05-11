@@ -250,8 +250,18 @@ async function cleanupPlaygroundDefaults(
 	// before the slash, or the whole entry for single-file. The
 	// `index.php` is WP's silence stub; the self-plugin entries are
 	// defense-in-depth (sync already excludes self).
+	// `manifestOverride` reaches us straight from the `?manifest=` query
+	// param, so the array contents aren't type-checked. Drop non-strings
+	// before deriving the allowlist — without this, `e.indexOf('/')` throws
+	// on `[1, true, null]` shaped input and aborts the boot.
+	const pluginEntries = manifest.plugins.filter(
+		(e): e is string => typeof e === 'string',
+	);
+	const themeEntries = manifest.themes.filter(
+		(e): e is string => typeof e === 'string',
+	);
 	const pluginAllow = new Set<string>([
-		...manifest.plugins.map((e) => {
+		...pluginEntries.map((e) => {
 			const slash = e.indexOf('/');
 			return slash === -1 ? e : e.slice(0, slash);
 		}),
@@ -260,7 +270,7 @@ async function cleanupPlaygroundDefaults(
 		`${selfPluginSlug}.php`,
 	]);
 	const themeAllow = new Set<string>([
-		...manifest.themes,
+		...themeEntries,
 		'index.php',
 		selfPluginSlug,
 	]);
@@ -554,8 +564,10 @@ async function runSqlFromDisk(
 	}
 }
 
-function phpStringLiteral(s: string): string {
-	// PHP single-quoted: escape backslashes and single quotes only.
+// PHP single-quoted: escape backslashes and single quotes only. Exported so
+// other modules that generate inline PHP (e.g. test-upgrade.ts) can share a
+// single escaping implementation — drift here is a code-injection risk.
+export function phpStringLiteral(s: string): string {
 	return `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 }
 

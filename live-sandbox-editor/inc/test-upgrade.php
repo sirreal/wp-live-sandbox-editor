@@ -13,8 +13,13 @@ use Live_Sandbox_Editor;
 
 /** Bootstraps the feature. Called from main plugin init(). */
 function init(): void {
-	add_action( 'admin_init', __NAMESPACE__ . '\\register_plugin_update_message_hooks' );
-	add_action( 'admin_init', __NAMESPACE__ . '\\register_theme_update_message_hooks' );
+	// Priority 11 runs after core's `_maybe_update_plugins` / `_maybe_update_themes`
+	// (both default priority 10 on `admin_init`), so freshly refreshed update
+	// transients are visible when we register per-item message hooks. Without
+	// this, a plugin/theme update first discovered by core on the current
+	// request wouldn't get its sandbox link until the *next* admin page load.
+	add_action( 'admin_init', __NAMESPACE__ . '\\register_plugin_update_message_hooks', 11 );
+	add_action( 'admin_init', __NAMESPACE__ . '\\register_theme_update_message_hooks', 11 );
 	add_filter( 'wp_prepare_themes_for_js', __NAMESPACE__ . '\\inject_theme_sandbox_links' );
 	add_action( 'admin_enqueue_scripts', __NAMESPACE__ . '\\enqueue_themes_grid_module' );
 }
@@ -25,7 +30,7 @@ function init(): void {
  * for it. Caller (Run-page enqueue) lifts this into AppData so Playground
  * can seed its own transient instead of hitting api.wordpress.org.
  *
- * @return array{plugin:string,slug:string,new_version:string,package:string,url:string}|null
+ * @return array{plugin:string,slug:string,new_version:string,package:string,url:string,requires:string,requires_php:string}|null
  */
 function get_plugin_update_payload( string $entry ): ?array {
 	if ( ! current_user_can( 'manage_options' ) ) {
@@ -57,11 +62,13 @@ function get_plugin_update_payload( string $entry ): ?array {
 		$slug = str_contains( $entry, '/' ) ? explode( '/', $entry, 2 )[0] : '';
 	}
 	return array(
-		'plugin'      => $entry,
-		'slug'        => $slug,
-		'new_version' => $get( 'new_version' ),
-		'package'     => $get( 'package' ),
-		'url'         => $get( 'url' ),
+		'plugin'       => $entry,
+		'slug'         => $slug,
+		'new_version'  => $get( 'new_version' ),
+		'package'      => $get( 'package' ),
+		'url'          => $get( 'url' ),
+		'requires'     => $get( 'requires' ),
+		'requires_php' => $get( 'requires_php' ),
 	);
 }
 
@@ -69,7 +76,7 @@ function get_plugin_update_payload( string $entry ): ?array {
  * Return the host's update payload for the given theme slug, or null.
  * Theme entries in `update_themes->response` are arrays (not objects).
  *
- * @return array{slug:string,new_version:string,package:string,url:string}|null
+ * @return array{slug:string,new_version:string,package:string,url:string,requires:string,requires_php:string}|null
  */
 function get_theme_update_payload( string $slug ): ?array {
 	if ( ! current_user_can( 'manage_options' ) ) {
@@ -84,10 +91,12 @@ function get_theme_update_payload( string $slug ): ?array {
 	}
 	$r = $updates->response[ $slug ];
 	return array(
-		'slug'        => $slug,
-		'new_version' => isset( $r['new_version'] ) ? (string) $r['new_version'] : '',
-		'package'     => isset( $r['package'] ) ? (string) $r['package'] : '',
-		'url'         => isset( $r['url'] ) ? (string) $r['url'] : '',
+		'slug'         => $slug,
+		'new_version'  => isset( $r['new_version'] ) ? (string) $r['new_version'] : '',
+		'package'      => isset( $r['package'] ) ? (string) $r['package'] : '',
+		'url'          => isset( $r['url'] ) ? (string) $r['url'] : '',
+		'requires'     => isset( $r['requires'] ) ? (string) $r['requires'] : '',
+		'requires_php' => isset( $r['requires_php'] ) ? (string) $r['requires_php'] : '',
 	);
 }
 
@@ -163,12 +172,18 @@ function inject_theme_sandbox_links( array $prepared_themes ): array {
 		if ( empty( $theme_data['hasUpdate'] ) || empty( $theme_data['update'] ) ) {
 			continue;
 		}
+		$update = (string) $theme_data['update'];
+		// If a previous filter pass (or upstream code) has already inserted
+		// our anchor, skip — re-running the regex below would stack a second
+		// `<br>` + link before `</p>`.
+		if ( false !== strpos( $update, 'lse-test-upgrade-link' ) ) {
+			continue;
+		}
 		$link_html = '<br>' . build_link_html(
 			(string) $slug,
 			'testThemeUpgrade',
 			'data-lse-test-theme-upgrade'
 		);
-		$update = (string) $theme_data['update'];
 		// Insert before the trailing `</p>`, tolerating whatever closes the
 		// notice (`</strong>`, plain text, or trailing whitespace). If there
 		// is no trailing `</p>` the markup has drifted and we silently no-op

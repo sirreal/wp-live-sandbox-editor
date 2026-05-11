@@ -1,4 +1,5 @@
 import type { PlaygroundClient } from '@wp-playground/client';
+import { phpStringLiteral } from './playground.js';
 import {
 	getAppData,
 	type TestPluginUpgradePayload,
@@ -212,11 +213,14 @@ function extractObjectLiteral(source: string, name: string): string | null {
 }
 
 /**
- * Install (idempotent) the mu-plugin that intercepts
+ * Write the mu-plugin that intercepts
  * `api.wordpress.org/{plugins,themes}-update-check` HTTP requests and
  * returns a synthetic response built from the `lse_test_upgrade_payload`
- * option. Each test-upgrade run rewrites that option just before
- * navigating, so the same mu-plugin serves both plugin and theme flows.
+ * option. The file is overwritten on every call — functionally idempotent,
+ * not literally; the content is identical each run so the overwrite is a
+ * no-op for behavior. Each test-upgrade run rewrites the option just
+ * before navigating, so the same mu-plugin serves both plugin and theme
+ * flows.
  */
 async function installInterceptor(
 	client: PlaygroundClient,
@@ -254,8 +258,8 @@ add_filter( 'pre_http_request', function ( $pre, $args, $url ) {
 				'new_version'  => $new_version,
 				'url'          => (string) ( $payload['url'] ?? '' ),
 				'package'      => (string) ( $payload['package'] ?? '' ),
-				'requires'     => '',
-				'requires_php' => '',
+				'requires'     => (string) ( $payload['requires'] ?? '' ),
+				'requires_php' => (string) ( $payload['requires_php'] ?? '' ),
 			);
 			// Route to no_update once the on-disk version has caught up,
 			// otherwise themes.php would keep flashing the upgrade notice
@@ -270,12 +274,14 @@ add_filter( 'pre_http_request', function ( $pre, $args, $url ) {
 		if ( '' !== $entry_path ) {
 			$new_version = (string) ( $payload['new_version'] ?? '' );
 			$info        = array(
-				'id'          => 'w.org/plugins/' . $slug,
-				'slug'        => $slug,
-				'plugin'      => $entry_path,
-				'new_version' => $new_version,
-				'url'         => (string) ( $payload['url'] ?? '' ),
-				'package'     => (string) ( $payload['package'] ?? '' ),
+				'id'           => 'w.org/plugins/' . $slug,
+				'slug'         => $slug,
+				'plugin'       => $entry_path,
+				'new_version'  => $new_version,
+				'url'          => (string) ( $payload['url'] ?? '' ),
+				'package'      => (string) ( $payload['package'] ?? '' ),
+				'requires'     => (string) ( $payload['requires'] ?? '' ),
+				'requires_php' => (string) ( $payload['requires_php'] ?? '' ),
 			);
 			if ( ! function_exists( 'get_plugins' ) ) {
 				require_once ABSPATH . 'wp-admin/includes/plugin.php';
@@ -308,23 +314,17 @@ add_filter( 'pre_http_request', function ( $pre, $args, $url ) {
 	});
 }
 
-/**
- * Encode a JS string for use inside a PHP single-quoted literal: only `\\`
- * and `'` need escaping.
- */
-function php(s: string): string {
-	return `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
-}
-
 function buildPluginPayloadPhp(p: TestPluginUpgradePayload): string {
 	return `
 		update_option( 'lse_test_upgrade_payload', array(
-			'kind'        => 'plugin',
-			'plugin'      => ${php(p.plugin)},
-			'slug'        => ${php(p.slug)},
-			'new_version' => ${php(p.new_version)},
-			'url'         => ${php(p.url)},
-			'package'     => ${php(p.package)},
+			'kind'         => 'plugin',
+			'plugin'       => ${phpStringLiteral(p.plugin)},
+			'slug'         => ${phpStringLiteral(p.slug)},
+			'new_version'  => ${phpStringLiteral(p.new_version)},
+			'url'          => ${phpStringLiteral(p.url)},
+			'package'      => ${phpStringLiteral(p.package)},
+			'requires'     => ${phpStringLiteral(p.requires)},
+			'requires_php' => ${phpStringLiteral(p.requires_php)},
 		), false );
 	`;
 }
@@ -332,11 +332,13 @@ function buildPluginPayloadPhp(p: TestPluginUpgradePayload): string {
 function buildThemePayloadPhp(p: TestThemeUpgradePayload): string {
 	return `
 		update_option( 'lse_test_upgrade_payload', array(
-			'kind'        => 'theme',
-			'slug'        => ${php(p.slug)},
-			'new_version' => ${php(p.new_version)},
-			'url'         => ${php(p.url)},
-			'package'     => ${php(p.package)},
+			'kind'         => 'theme',
+			'slug'         => ${phpStringLiteral(p.slug)},
+			'new_version'  => ${phpStringLiteral(p.new_version)},
+			'url'          => ${phpStringLiteral(p.url)},
+			'package'      => ${phpStringLiteral(p.package)},
+			'requires'     => ${phpStringLiteral(p.requires)},
+			'requires_php' => ${phpStringLiteral(p.requires_php)},
 		), false );
 	`;
 }
