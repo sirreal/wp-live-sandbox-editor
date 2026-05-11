@@ -69,6 +69,10 @@ async function runUpgrade(
  * `update.php` will expect from the iframe's own navigation. Minting the
  * nonce via `client.run()` would use a different session token (no
  * LOGGED_IN cookie) and trip "link expired."
+ *
+ * The matcher extracts every `update.php?…` URL on the page and parses its
+ * query string with `URLSearchParams`, so query-arg order doesn't matter and
+ * extra args injected by core or another plugin don't break the lookup.
  */
 async function findUpgradeUrl(
 	client: PlaygroundClient,
@@ -76,23 +80,25 @@ async function findUpgradeUrl(
 ): Promise<string> {
 	const response = await client.request({ url: kind.listingPath });
 	// esc_url() can emit either &amp; or &#038; for query separators in admin
-	// link hrefs. Normalize to plain & so a single regex covers both forms.
+	// link hrefs. Normalize to plain & before parsing.
 	const normalized = response.text.replace(/&(?:amp;|#038;)/g, '&');
 
-	const encoded = encodeURIComponent(kind.keyValue);
-	const re = new RegExp(
-		`update\\.php\\?action=${kind.action}&${kind.keyParam}=${escapeRegex(encoded)}&_wpnonce=([a-f0-9]+)`,
-		'i',
-	);
-	const match = normalized.match(re);
-	if (!match) {
-		throw new Error(kind.notFoundError);
+	// Match every update.php URL on the page; the negated character class
+	// chops at HTML attribute and tag boundaries.
+	const urlRe = /\/wp-admin\/update\.php\?[^\s"'<>]+/gi;
+	for (const m of normalized.matchAll(urlRe)) {
+		const url = m[0];
+		const qIdx = url.indexOf('?');
+		const params = new URLSearchParams(url.slice(qIdx + 1));
+		if (
+			params.get('action') === kind.action &&
+			params.get(kind.keyParam) === kind.keyValue &&
+			params.get('_wpnonce')
+		) {
+			return url;
+		}
 	}
-	return `/wp-admin/update.php?action=${kind.action}&${kind.keyParam}=${encoded}&_wpnonce=${match[1]}`;
-}
-
-function escapeRegex(s: string): string {
-	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	throw new Error(kind.notFoundError);
 }
 
 function sleep(ms: number): Promise<void> {

@@ -93,10 +93,14 @@ function inject_theme_sandbox_links( array $prepared_themes ): array {
 			'data-lse-test-theme-upgrade',
 			$label
 		);
-		$suffix = '</strong></p>';
 		$update = (string) $theme_data['update'];
-		if ( str_ends_with( $update, $suffix ) ) {
-			$theme_data['update'] = substr( $update, 0, -strlen( $suffix ) ) . $link_html . $suffix;
+		// Insert before the trailing `</p>`, tolerating whatever closes the
+		// notice (`</strong>`, plain text, or trailing whitespace). If there
+		// is no trailing `</p>` the markup has drifted and we silently no-op
+		// rather than risk producing broken HTML.
+		$replaced = preg_replace( '#</p>\s*$#i', $link_html . '$0', $update, 1 );
+		if ( null !== $replaced && $replaced !== $update ) {
+			$theme_data['update'] = $replaced;
 		}
 	}
 	unset( $theme_data );
@@ -122,13 +126,29 @@ function render_theme_link( string $slug ): void {
 }
 
 /**
+ * URL of the Run page, usable from both blog admin and network admin.
+ *
+ * `menu_page_url()` reads `$_parent_pages`, which is only populated for menus
+ * registered via `admin_menu`. The plugin doesn't register on
+ * `network_admin_menu`, so calling `menu_page_url()` from a network-admin
+ * request returns an empty string and any `add_query_arg()` built on top of
+ * it resolves against the current network-admin URL — i.e. the link goes
+ * nowhere useful. Building the URL via `admin_url()` skips the
+ * `$_parent_pages` lookup and lands on the current blog's admin (the main
+ * site when called from network admin), where the menu IS registered.
+ */
+function get_run_page_url(): string {
+	return admin_url( 'admin.php?page=' . Live_Sandbox_Editor\SLUG );
+}
+
+/**
  * Build the "Or {link}." sandbox-link HTML fragment to append to an update
  * notice. The leading <br> breaks it onto its own line below the standard
  * "View version X details" / "update now" links so the sandbox-test offer
  * reads as a distinct alternative.
  */
 function build_link_html( string $key, string $query_arg, string $data_attr, string $label ): string {
-	$run_url = menu_page_url( Live_Sandbox_Editor\SLUG, false );
+	$run_url = get_run_page_url();
 	$href    = add_query_arg( $query_arg, $key, $run_url );
 
 	return '<br>' . sprintf(
@@ -162,7 +182,7 @@ function print_themes_grid_script(): void {
 	if ( ! is_object( $updates ) || empty( $updates->response ) || ! is_array( $updates->response ) ) {
 		return;
 	}
-	$run_url = menu_page_url( Live_Sandbox_Editor\SLUG, false );
+	$run_url = get_run_page_url();
 	$hrefs   = array();
 	foreach ( array_keys( $updates->response ) as $slug ) {
 		$hrefs[ (string) $slug ] = add_query_arg( 'testThemeUpgrade', $slug, $run_url );
