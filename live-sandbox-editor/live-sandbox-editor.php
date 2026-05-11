@@ -84,6 +84,10 @@ function enqueue_assets( string $hook_suffix ): void {
 		asset_version( 'style.css' )
 	);
 
+	if ( 'run' === $page ) {
+		add_filter( 'wp_resource_hints', __NAMESPACE__ . '\\dns_prefetch_hints', 10, 2 );
+	}
+
 	if ( 'setup' === $page ) {
 		wp_enqueue_script_module(
 			SETUP_SLUG,
@@ -120,6 +124,20 @@ function enqueue_assets( string $hook_suffix ): void {
 		array(),
 		asset_version( 'build/monaco.css' )
 	);
+}
+
+/**
+ * Add a DNS-prefetch resource hint for playground.wordpress.net.
+ *
+ * @param array<int,string|array<string,string>> $urls          Resource hint URLs.
+ * @param string                                 $relation_type Hint relation type.
+ * @return array<int,string|array<string,string>>
+ */
+function dns_prefetch_hints( array $urls, string $relation_type ): array {
+	if ( 'dns-prefetch' === $relation_type ) {
+		$urls[] = 'https://playground.wordpress.net/';
+	}
+	return $urls;
 }
 
 /**
