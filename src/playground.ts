@@ -14,6 +14,12 @@ import uploadsPassthroughMuPhp from './uploads-passthrough.mu.php?raw';
 
 const FIXUPS_PATH = '/tmp/lse-fixups.php';
 
+// Mirror of the host-side `Live_Sandbox_Editor\SLUG` (live-sandbox-editor.php).
+// Used to self-protect the LSE plugin's own directory from any pre-sync
+// cleanup that prunes Playground's bundled defaults.
+const LSE_SLUG = 'live-sandbox-editor';
+const LSE_MAIN_FILE = `${LSE_SLUG}.php`;
+
 export interface DebugSettings {
 	scriptDebug: boolean;
 	wpDebug: boolean;
@@ -246,23 +252,23 @@ async function cleanupPlaygroundDefaults(
 
 	// Plugin manifest entries are `slug/main.php` (multi-file) or
 	// `single.php` (single-file). Top-level basename is the part
-	// before the slash, or the whole entry for single-file.
-	const pluginAllow = new Set<string>(
-		manifest.plugins.map((e) => {
+	// before the slash, or the whole entry for single-file. The
+	// `index.php` is WP's silence stub; the LSE entries are
+	// defense-in-depth (sync already excludes self).
+	const pluginAllow = new Set<string>([
+		...manifest.plugins.map((e) => {
 			const slash = e.indexOf('/');
 			return slash === -1 ? e : e.slice(0, slash);
 		}),
-	);
-	const themeAllow = new Set<string>(manifest.themes);
-	// Always preserved: the WP silence stub at each dir's root, plus
-	// the LSE plugin itself (defense in depth — the host's sync
-	// excludes it, but a stale Playground state shouldn't get pruned
-	// from under us).
-	pluginAllow.add('index.php');
-	pluginAllow.add('live-sandbox-editor');
-	pluginAllow.add('live-sandbox-editor.php');
-	themeAllow.add('index.php');
-	themeAllow.add('live-sandbox-editor');
+		'index.php',
+		LSE_SLUG,
+		LSE_MAIN_FILE,
+	]);
+	const themeAllow = new Set<string>([
+		...manifest.themes,
+		'index.php',
+		LSE_SLUG,
+	]);
 
 	const pluginAllowPhp = phpArrayLiteral([...pluginAllow]);
 	const themeAllowPhp = phpArrayLiteral([...themeAllow]);
@@ -278,8 +284,7 @@ async function cleanupPlaygroundDefaults(
 				if ( is_link( $path ) ) { @unlink( $path ); return; }
 				if ( ! file_exists( $path ) ) { return; }
 				if ( is_file( $path ) ) { @unlink( $path ); return; }
-				// Directory: depth-first so children disappear before
-				// their parents — rmdir refuses non-empty dirs.
+				// Depth-first: rmdir refuses non-empty dirs.
 				$rdi = new RecursiveDirectoryIterator(
 					$path,
 					FilesystemIterator::SKIP_DOTS | FilesystemIterator::CURRENT_AS_FILEINFO
@@ -309,14 +314,13 @@ async function cleanupPlaygroundDefaults(
 				return $removed;
 			};
 
-			echo json_encode( array(
-				'plugins' => $prune( $plugin_dir, $plugin_allow ),
-				'themes'  => $prune( $theme_dir, $theme_allow ),
-			) );
+			$plugins_removed = $prune( $plugin_dir, $plugin_allow );
+			$themes_removed  = $prune( $theme_dir, $theme_allow );
+			${debugMode ? `echo json_encode( array( 'plugins' => $plugins_removed, 'themes' => $themes_removed ) );` : ''}
 		`,
 	});
 
-	if (debugMode) {
+	if (debugMode && result.text) {
 		try {
 			const summary = JSON.parse(result.text) as {
 				plugins: string[];

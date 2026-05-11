@@ -219,8 +219,6 @@ function app_data( array $data ): array {
  * Playground's `preferredVersions` accepts. Returns empty string on
  * unparseable input so the JS side can fall back to its defaults.
  *
- * Handles `6.9-beta1`, `6.9.4-RC2`, `8.2.20`, `9.0.0-dev` etc.
- *
  * @param string $raw Raw version string.
  * @return string Major.minor, or '' on failure.
  */
