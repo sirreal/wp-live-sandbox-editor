@@ -66,7 +66,18 @@ export interface TestThemeUpgradePayload {
 	url: string;
 }
 
-export function getAppData(moduleId = 'live-sandbox-editor'): AppData {
+export interface ThemesGridData {
+	hrefs: Record<string, string>;
+	label: string;
+	orPrefix: string;
+	orSuffix: string;
+}
+
+export function getModuleData<T>(moduleId: string): T {
 	const el = document.getElementById(`wp-script-module-data-${moduleId}`);
-	return JSON.parse(el?.textContent ?? '{}') as AppData;
+	return JSON.parse(el?.textContent ?? '{}') as T;
+}
+
+export function getAppData(moduleId = 'live-sandbox-editor'): AppData {
+	return getModuleData<AppData>(moduleId);
 }

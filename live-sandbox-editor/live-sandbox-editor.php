@@ -20,9 +20,10 @@ use FileTreeProducer;
 use WP_REST_Request;
 use WordPress\DataLiberation\MySQLDumpProducer;
 
-const SLUG       = 'live-sandbox-editor';
-const SETUP_SLUG = 'live-sandbox-editor-setup';
-const VERSION    = '0.1';
+const SLUG        = 'live-sandbox-editor';
+const SETUP_SLUG  = 'live-sandbox-editor-setup';
+const VERSION     = '0.1';
+const PLUGIN_FILE = __FILE__;
 
 require_once __DIR__ . '/inc/sync-stream.php';
 require_once __DIR__ . '/inc/manifest.php';

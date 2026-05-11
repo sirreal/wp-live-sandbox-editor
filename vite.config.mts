@@ -19,6 +19,7 @@ export default defineConfig({
 			input: {
 				main: 'src/main.ts',
 				setup: 'src/setup.ts',
+				'themes-grid': 'src/themes-grid.ts',
 			},
 			/*
 			 * `@wordpress/interactivity` is provided at runtime by WordPress

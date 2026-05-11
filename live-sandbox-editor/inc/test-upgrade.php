@@ -16,7 +16,7 @@ function init(): void {
 	add_action( 'admin_init', __NAMESPACE__ . '\\register_plugin_update_message_hooks' );
 	add_action( 'admin_init', __NAMESPACE__ . '\\register_theme_update_message_hooks' );
 	add_filter( 'wp_prepare_themes_for_js', __NAMESPACE__ . '\\inject_theme_sandbox_links' );
-	add_action( 'admin_footer-themes.php', __NAMESPACE__ . '\\print_themes_grid_script' );
+	add_action( 'admin_enqueue_scripts', __NAMESPACE__ . '\\enqueue_themes_grid_module' );
 }
 
 /**
@@ -257,15 +257,17 @@ function build_link_html( string $key, string $query_arg, string $data_attr, str
 
 /**
  * themes.php's per-card "New version available." notice is rendered by a JS
- * Backbone template, so there's no per-card PHP hook to attach to. This
- * script (a) walks the initial DOM after load, (b) re-applies on subtree
- * mutation (re-renders), and (c) installs a single capture-phase click
- * handler that stops propagation for every .lse-test-upgrade-link — without
- * that, themes.js's delegated `click .update-message` handler hijacks the
- * link into the AJAX-update flow. The capture-phase listener also covers
- * PHP-filter-injected anchors that the DOM-walk skips as already-present.
+ * Backbone template, so there's no per-card PHP hook to attach to. The
+ * module at src/themes-grid.ts walks the DOM, observes re-renders, and
+ * captures clicks before themes.js's delegated handler hijacks the link.
+ * Host-side data (href map + label + translation fragments) is forwarded
+ * via the `script_module_data_{$module_id}` filter and consumed in JS
+ * through the same `wp-script-module-data-…` element that AppData uses.
  */
-function print_themes_grid_script(): void {
+function enqueue_themes_grid_module( string $hook_suffix ): void {
+	if ( 'themes.php' !== $hook_suffix ) {
+		return;
+	}
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
 	}
@@ -282,99 +284,29 @@ function print_themes_grid_script(): void {
 	/* translators: %s: link to test the update in the Live Sandbox Editor. */
 	$or_label = __( 'Or %s.', 'live-sandbox-editor' );
 	// Split on the PHP side so JS never has to know about gettext placeholder
-	// shapes — translations may legally use `%1$s` instead of `%s`, and a
-	// naive `split('%s')` in JS would then mis-format. If the translation
-	// drops the placeholder entirely (broken catalog), fall back to the
-	// source string's split.
+	// shapes — translations may legally use `%1$s` instead of `%s`. If the
+	// translation drops the placeholder entirely (broken catalog), fall back
+	// to the source string's split.
 	$or_parts  = preg_split( '/%(?:\d+\$)?s/', $or_label, 2 );
 	$or_prefix = ( is_array( $or_parts ) && isset( $or_parts[1] ) ) ? $or_parts[0] : 'Or ';
 	$or_suffix = ( is_array( $or_parts ) && isset( $or_parts[1] ) ) ? $or_parts[1] : '.';
-	?>
-	<script>
-	(function() {
-		var hrefs = <?php echo wp_json_encode( $hrefs ); ?>;
-		var linkLabel = <?php echo wp_json_encode( $label ); ?>;
-		var orPrefix = <?php echo wp_json_encode( $or_prefix ); ?>;
-		var orSuffix = <?php echo wp_json_encode( $or_suffix ); ?>;
 
-		// Capture-phase listener fires before themes.js's bubble-phase
-		// delegation on `.update-message`, covering both JS-injected cards
-		// and PHP-filter-injected anchors uniformly.
-		document.addEventListener('click', function(e) {
-			var t = e.target;
-			if (t && t.closest && t.closest('a.lse-test-upgrade-link')) {
-				e.stopPropagation();
-			}
-		}, true);
-
-		function slugFor(card) {
-			// JS-rendered cards have data-slug; PHP-rendered cards expose
-			// the slug via the theme-name id ("{slug}-name").
-			var slug = card.getAttribute('data-slug');
-			if (slug) return slug;
-			var name = card.querySelector('.theme-name[id$="-name"]');
-			if (!name) return null;
-			return name.id.replace(/-name$/, '');
+	$module_id = Live_Sandbox_Editor\SLUG . '-themes-grid';
+	wp_enqueue_script_module(
+		$module_id,
+		plugins_url( 'build/themes-grid.js', Live_Sandbox_Editor\PLUGIN_FILE ),
+		array(),
+		Live_Sandbox_Editor\asset_version( 'build/themes-grid.js' )
+	);
+	add_filter(
+		"script_module_data_{$module_id}",
+		static function () use ( $hrefs, $label, $or_prefix, $or_suffix ) {
+			return array(
+				'hrefs'     => $hrefs,
+				'label'     => $label,
+				'orPrefix'  => $or_prefix,
+				'orSuffix'  => $or_suffix,
+			);
 		}
-
-		function append(card) {
-			var msg = card.querySelector('.update-message');
-			if (!msg) return;
-			if (msg.querySelector('.lse-test-upgrade-link')) return;
-			var p = msg.querySelector('p');
-			if (!p) return;
-			var slug = slugFor(card);
-			var href = slug && hrefs[slug];
-			if (!href) return;
-
-			var link = document.createElement('a');
-			link.className = 'lse-test-upgrade-link';
-			link.href = href;
-			link.textContent = linkLabel;
-			link.setAttribute('data-lse-test-theme-upgrade', slug);
-
-			p.appendChild(document.createElement('br'));
-			p.appendChild(document.createTextNode(orPrefix));
-			p.appendChild(link);
-			p.appendChild(document.createTextNode(orSuffix));
-		}
-
-		function processAll() {
-			document.querySelectorAll('.theme').forEach(append);
-		}
-
-		if (document.readyState !== 'loading') {
-			processAll();
-		} else {
-			document.addEventListener('DOMContentLoaded', processAll);
-		}
-
-		// themes.js's main render path empties `.wrap` and appends a fresh
-		// `.themes` container, so the original `.themes` node we'd observe
-		// gets detached. Observe `#wpbody-content` (a stable ancestor) and
-		// re-process. rAF-coalesce because themes.js fires many small
-		// mutations per render (search-as-you-type, modal open/close).
-		var container = document.getElementById('wpbody-content') || document.body;
-		if (container && typeof MutationObserver === 'function') {
-			var pending = false;
-			var schedule = function() {
-				if (pending) return;
-				pending = true;
-				requestAnimationFrame(function() {
-					pending = false;
-					processAll();
-				});
-			};
-			new MutationObserver(function(records) {
-				for (var i = 0; i < records.length; i++) {
-					if (records[i].addedNodes && records[i].addedNodes.length) {
-						schedule();
-						return;
-					}
-				}
-			}).observe(container, { childList: true, subtree: true });
-		}
-	})();
-	</script>
-	<?php
+	);
 }
