@@ -174,6 +174,12 @@ function app_data( array $data ): array {
 		'runUrl'      => menu_page_url( SLUG, false ),
 		'scriptDebug' => defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG,
 		'wpDebug'     => defined( 'WP_DEBUG' ) && WP_DEBUG,
+		// Major.minor only — Playground's blueprint `preferredVersions`
+		// accepts that shape plus 'latest'/'beta'/'nightly', not full
+		// patches. Sandbox boots on the host's WP+PHP series so admin
+		// chrome, list-table HTML, and available APIs match.
+		'wpVersion'   => normalize_version( $GLOBALS['wp_version'] ?? '' ),
+		'phpVersion'  => normalize_version( PHP_VERSION ),
 	);
 
 	// When the Run page is reached via a "test … in sandbox" link, lift
@@ -206,6 +212,20 @@ function app_data( array $data ): array {
 	// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
 	return array_merge( $data, $extras );
+}
+
+/**
+ * Reduce a WP or PHP version string to `major.minor`, the shape
+ * Playground's `preferredVersions` accepts. Returns empty string on
+ * unparseable input so the JS side can fall back to its defaults.
+ *
+ * Handles `6.9-beta1`, `6.9.4-RC2`, `8.2.20`, `9.0.0-dev` etc.
+ *
+ * @param string $raw Raw version string.
+ * @return string Major.minor, or '' on failure.
+ */
+function normalize_version( string $raw ): string {
+	return preg_match( '/^(\d+\.\d+)/', $raw, $m ) ? $m[1] : '';
 }
 
 /**

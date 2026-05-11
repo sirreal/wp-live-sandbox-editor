@@ -26,6 +26,11 @@ export interface AppData {
 	runUrl: string;
 	scriptDebug: boolean;
 	wpDebug: boolean;
+	// Host's WP / PHP versions as `major.minor` (e.g. "6.9", "8.2"), or
+	// "" when normalization failed on the host side — JS falls back to
+	// Playground's defaults in that case.
+	wpVersion: string;
+	phpVersion: string;
 	testPluginUpgradePayload?: TestPluginUpgradePayload;
 	testThemeUpgradePayload?: TestThemeUpgradePayload;
 }
