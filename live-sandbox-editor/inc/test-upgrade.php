@@ -163,7 +163,7 @@ function inject_theme_sandbox_links( array $prepared_themes ): array {
 		if ( empty( $theme_data['hasUpdate'] ) || empty( $theme_data['update'] ) ) {
 			continue;
 		}
-		$link_html = build_link_html(
+		$link_html = '<br>' . build_link_html(
 			(string) $slug,
 			'testThemeUpgrade',
 			'data-lse-test-theme-upgrade'
@@ -195,7 +195,7 @@ function inject_theme_sandbox_links( array $prepared_themes ): array {
 function render_plugin_link( string $entry ): void {
 	// build_link_html() already escapes every interpolation with the
 	// context-correct helper; no kses wrap needed.
-	echo build_link_html( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- See build_link_html().
+	echo '<br>' . build_link_html( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- See build_link_html().
 		$entry,
 		'testUpgrade',
 		'data-lse-test-upgrade'
@@ -205,7 +205,7 @@ function render_plugin_link( string $entry ): void {
 function render_theme_link( string $slug ): void {
 	// build_link_html() already escapes every interpolation with the
 	// context-correct helper; no kses wrap needed.
-	echo build_link_html( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- See build_link_html().
+	echo '<br>' . build_link_html( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- See build_link_html().
 		$slug,
 		'testThemeUpgrade',
 		'data-lse-test-theme-upgrade'
@@ -229,17 +229,17 @@ function get_run_page_url(): string {
 }
 
 /**
- * Build the sandbox-link HTML fragment to append to an update notice. The
- * whole sentence is the link so translators handle it as a unit (no
- * placeholder splitting). The leading <br> breaks it onto its own line
- * below the standard "View version X details" / "update now" links.
+ * Build the sandbox-link anchor to append to an update notice. The whole
+ * sentence is the link so translators handle it as a unit (no placeholder
+ * splitting). Callers are responsible for whatever separator (`<br>`,
+ * whitespace, etc.) makes sense in their surrounding markup.
  */
 function build_link_html( string $key, string $query_arg, string $data_attr ): string {
 	$run_url = get_run_page_url();
 	$href    = add_query_arg( $query_arg, $key, $run_url );
 
 	return sprintf(
-		'<br><a href="%s" class="lse-test-upgrade-link" %s="%s">%s</a>',
+		'<a href="%s" class="lse-test-upgrade-link" %s="%s">%s</a>',
 		esc_url( $href ),
 		esc_attr( $data_attr ),
 		esc_attr( $key ),
