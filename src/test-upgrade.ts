@@ -1,7 +1,8 @@
 import type { PlaygroundClient } from '@wp-playground/client';
-import type {
-	TestPluginUpgradePayload,
-	TestThemeUpgradePayload,
+import {
+	getAppData,
+	type TestPluginUpgradePayload,
+	type TestThemeUpgradePayload,
 } from './types.js';
 
 interface UpgradeKind {
@@ -26,10 +27,11 @@ export async function runTestPluginUpgrade(
 	payload: TestPluginUpgradePayload,
 	onStatus: (status: string) => void,
 ): Promise<void> {
+	const { adminPath } = getAppData();
 	await runUpgrade(
 		client,
 		{
-			listingPath: '/wp-admin/plugins.php',
+			listingPath: `${adminPath}plugins.php`,
 			action: 'upgrade-plugin',
 			keyParam: 'plugin',
 			keyValue: payload.plugin,
@@ -45,10 +47,11 @@ export async function runTestThemeUpgrade(
 	payload: TestThemeUpgradePayload,
 	onStatus: (status: string) => void,
 ): Promise<void> {
+	const { adminPath } = getAppData();
 	await runUpgrade(
 		client,
 		{
-			listingPath: '/wp-admin/themes.php',
+			listingPath: `${adminPath}themes.php`,
 			action: 'upgrade-theme',
 			keyParam: 'theme',
 			keyValue: payload.slug,
@@ -92,14 +95,16 @@ async function runUpgrade(
  *
  * The matcher extracts every `update.php?…` URL on the page and parses its
  * query string with `URLSearchParams`, so query-arg order doesn't matter and
- * extra args injected by core or another plugin don't break the lookup. The
- * `/wp-admin/` prefix is optional because themes.php's Backbone template
- * renders bare `update.php?…` hrefs (the host-resolved form).
+ * extra args injected by core or another plugin don't break the lookup.
+ * Matches both `/wp-admin/update.php?…` and bare `update.php?…` (the form
+ * emitted by themes.php's Backbone template); the result is rebuilt against
+ * `adminPath` for navigation.
  */
 async function findUpgradeUrl(
 	client: PlaygroundClient,
 	kind: UpgradeKind,
 ): Promise<string> {
+	const { adminPath } = getAppData();
 	const docroot = await client.documentRoot;
 
 	await installInterceptor(client, docroot);
@@ -125,7 +130,7 @@ async function findUpgradeUrl(
 	// where the URL's terminating quote is preceded by a `\`. Without
 	// excluding the backslash we'd capture it into the match, corrupt
 	// the trailing nonce, and update.php would respond "link expired."
-	const urlRe = /(?:\/wp-admin\/)?update\.php\?[^\s"'<>\\]+/gi;
+	const urlRe = /update\.php\?[^\s"'<>\\]+/gi;
 	for (const m of normalized.matchAll(urlRe)) {
 		const url = m[0];
 		const qIdx = url.indexOf('?');
@@ -135,8 +140,7 @@ async function findUpgradeUrl(
 			params.get(kind.keyParam) === kind.keyValue &&
 			params.get('_wpnonce')
 		) {
-			const idx = url.indexOf('update.php?');
-			return `/wp-admin/${url.slice(idx)}`;
+			return `${adminPath}${url}`;
 		}
 	}
 	throw new Error(kind.notFoundError);

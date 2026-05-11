@@ -186,6 +186,10 @@ function app_data( array $data ): array {
 		// host-side identifier — sharing it keeps that single source of
 		// truth.
 		'selfPluginSlug' => SLUG,
+		// Admin URL path (e.g. "/wp-admin/") for JS callers that need to
+		// build admin URLs without hardcoding the prefix. Derived from
+		// admin_url() so a non-stock install is captured at the source.
+		'adminPath'      => (string) wp_parse_url( admin_url(), PHP_URL_PATH ),
 	);
 
 	// When the Run page is reached via a "test … in sandbox" link, lift
