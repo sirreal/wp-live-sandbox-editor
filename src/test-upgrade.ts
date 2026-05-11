@@ -179,31 +179,42 @@ add_filter( 'pre_http_request', function ( $pre, $args, $url ) {
 	if ( $is_themes && 'theme' === $payload['kind'] ) {
 		$slug = (string) ( $payload['slug'] ?? '' );
 		if ( '' !== $slug ) {
-			$body['themes'] = array(
-				$slug => array(
-					'theme'        => $slug,
-					'new_version'  => (string) ( $payload['new_version'] ?? '' ),
-					'url'          => (string) ( $payload['url'] ?? '' ),
-					'package'      => (string) ( $payload['package'] ?? '' ),
-					'requires'     => '',
-					'requires_php' => '',
-				),
+			$new_version = (string) ( $payload['new_version'] ?? '' );
+			$entry       = array(
+				'theme'        => $slug,
+				'new_version'  => $new_version,
+				'url'          => (string) ( $payload['url'] ?? '' ),
+				'package'      => (string) ( $payload['package'] ?? '' ),
+				'requires'     => '',
+				'requires_php' => '',
 			);
+			// Route to no_update once the on-disk version has caught up,
+			// otherwise themes.php would keep flashing the upgrade notice
+			// after a successful test upgrade.
+			$installed = (string) wp_get_theme( $slug )->get( 'Version' );
+			$bucket    = ( '' !== $installed && version_compare( $installed, $new_version, '>=' ) ) ? 'no_update' : 'themes';
+			$body[ $bucket ] = array( $slug => $entry );
 		}
 	} elseif ( $is_plugins && 'plugin' === $payload['kind'] ) {
-		$entry = (string) ( $payload['plugin'] ?? '' );
-		$slug  = (string) ( $payload['slug'] ?? '' );
-		if ( '' !== $entry ) {
-			$body['plugins'] = array(
-				$entry => array(
-					'id'          => 'w.org/plugins/' . $slug,
-					'slug'        => $slug,
-					'plugin'      => $entry,
-					'new_version' => (string) ( $payload['new_version'] ?? '' ),
-					'url'         => (string) ( $payload['url'] ?? '' ),
-					'package'     => (string) ( $payload['package'] ?? '' ),
-				),
+		$entry_path = (string) ( $payload['plugin'] ?? '' );
+		$slug       = (string) ( $payload['slug'] ?? '' );
+		if ( '' !== $entry_path ) {
+			$new_version = (string) ( $payload['new_version'] ?? '' );
+			$info        = array(
+				'id'          => 'w.org/plugins/' . $slug,
+				'slug'        => $slug,
+				'plugin'      => $entry_path,
+				'new_version' => $new_version,
+				'url'         => (string) ( $payload['url'] ?? '' ),
+				'package'     => (string) ( $payload['package'] ?? '' ),
 			);
+			if ( ! function_exists( 'get_plugins' ) ) {
+				require_once ABSPATH . 'wp-admin/includes/plugin.php';
+			}
+			$all_plugins     = get_plugins();
+			$installed       = isset( $all_plugins[ $entry_path ]['Version'] ) ? (string) $all_plugins[ $entry_path ]['Version'] : '';
+			$bucket          = ( '' !== $installed && version_compare( $installed, $new_version, '>=' ) ) ? 'no_update' : 'plugins';
+			$body[ $bucket ] = array( $entry_path => $info );
 		}
 	}
 
