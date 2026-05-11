@@ -6,6 +6,9 @@
 		"SCRIPT_DEBUG": true,
 		"WP_DEBUG_LOG": "/var/www/html/wp-content/debug.log"
 	},
-	"plugins": ["./live-sandbox-editor"],
+	"plugins": [
+		"./live-sandbox-editor",
+		"https://downloads.wordpress.org/plugin/plugin-check.zip"
+	],
 	"testsEnvironment": false
 }
