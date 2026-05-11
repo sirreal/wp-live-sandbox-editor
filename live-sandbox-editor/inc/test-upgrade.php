@@ -84,6 +84,11 @@ function inject_theme_sandbox_links( array $prepared_themes ): array {
 	}
 	$label = __( 'test the theme update in the sandbox', 'live-sandbox-editor' );
 	foreach ( $prepared_themes as $slug => &$theme_data ) {
+		// wp_prepare_themes_for_js is filterable; an upstream filter could
+		// hand us a non-array value for a single theme. Guard at the boundary.
+		if ( ! is_array( $theme_data ) ) {
+			continue;
+		}
 		if ( empty( $theme_data['hasUpdate'] ) || empty( $theme_data['update'] ) ) {
 			continue;
 		}
@@ -97,8 +102,18 @@ function inject_theme_sandbox_links( array $prepared_themes ): array {
 		// Insert before the trailing `</p>`, tolerating whatever closes the
 		// notice (`</strong>`, plain text, or trailing whitespace). If there
 		// is no trailing `</p>` the markup has drifted and we silently no-op
-		// rather than risk producing broken HTML.
-		$replaced = preg_replace( '#</p>\s*$#i', $link_html . '$0', $update, 1 );
+		// rather than risk producing broken HTML. Using preg_replace_callback
+		// keeps `$link_html` out of the replacement-string parser — otherwise
+		// any `$0`..`$9` sequence (e.g. from a translated label) would be
+		// reinterpreted as a backreference.
+		$replaced = preg_replace_callback(
+			'#</p>\s*$#i',
+			static function ( array $m ) use ( $link_html ): string {
+				return $link_html . $m[0];
+			},
+			$update,
+			1
+		);
 		if ( null !== $replaced && $replaced !== $update ) {
 			$theme_data['update'] = $replaced;
 		}
@@ -108,21 +123,25 @@ function inject_theme_sandbox_links( array $prepared_themes ): array {
 }
 
 function render_plugin_link( string $entry ): void {
-	echo wp_kses_post( build_link_html(
+	// build_link_html() already escapes every interpolation with the
+	// context-correct helper; no kses wrap needed.
+	echo build_link_html( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- See build_link_html().
 		$entry,
 		'testUpgrade',
 		'data-lse-test-upgrade',
 		__( 'test the plugin update in the sandbox', 'live-sandbox-editor' )
-	) );
+	);
 }
 
 function render_theme_link( string $slug ): void {
-	echo wp_kses_post( build_link_html(
+	// build_link_html() already escapes every interpolation with the
+	// context-correct helper; no kses wrap needed.
+	echo build_link_html( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- See build_link_html().
 		$slug,
 		'testThemeUpgrade',
 		'data-lse-test-theme-upgrade',
 		__( 'test the theme update in the sandbox', 'live-sandbox-editor' )
-	) );
+	);
 }
 
 /**
