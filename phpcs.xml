@@ -151,6 +151,13 @@
 		from upgrader action links. Same `lse_` prefix convention.
 		-->
 		<exclude-pattern>./src/iframe-target-fix\.mu\.php$</exclude-pattern>
+		<!--
+		`src/test-upgrade-intercept.mu.php` is the same shape: a Playground
+		mu-plugin installed inside the sandbox during the test-upgrade flow
+		to short-circuit api.wordpress.org update-check calls with a
+		synthetic response. Same `lse_` prefix convention.
+		-->
+		<exclude-pattern>./src/test-upgrade-intercept\.mu\.php$</exclude-pattern>
 	</rule>
 
 	<rule ref="WordPress.Files.FileName">
