@@ -154,7 +154,6 @@ function inject_theme_sandbox_links( array $prepared_themes ): array {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return $prepared_themes;
 	}
-	$label = __( 'test the theme update in the sandbox', 'live-sandbox-editor' );
 	foreach ( $prepared_themes as $slug => &$theme_data ) {
 		// wp_prepare_themes_for_js is filterable; an upstream filter could
 		// hand us a non-array value for a single theme. Guard at the boundary.
@@ -167,8 +166,7 @@ function inject_theme_sandbox_links( array $prepared_themes ): array {
 		$link_html = build_link_html(
 			(string) $slug,
 			'testThemeUpgrade',
-			'data-lse-test-theme-upgrade',
-			$label
+			'data-lse-test-theme-upgrade'
 		);
 		$update = (string) $theme_data['update'];
 		// Insert before the trailing `</p>`, tolerating whatever closes the
@@ -200,8 +198,7 @@ function render_plugin_link( string $entry ): void {
 	echo build_link_html( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- See build_link_html().
 		$entry,
 		'testUpgrade',
-		'data-lse-test-upgrade',
-		__( 'test the plugin update in the sandbox', 'live-sandbox-editor' )
+		'data-lse-test-upgrade'
 	);
 }
 
@@ -211,8 +208,7 @@ function render_theme_link( string $slug ): void {
 	echo build_link_html( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- See build_link_html().
 		$slug,
 		'testThemeUpgrade',
-		'data-lse-test-theme-upgrade',
-		__( 'test the theme update in the sandbox', 'live-sandbox-editor' )
+		'data-lse-test-theme-upgrade'
 	);
 }
 
@@ -233,25 +229,21 @@ function get_run_page_url(): string {
 }
 
 /**
- * Build the "Or {link}." sandbox-link HTML fragment to append to an update
- * notice. The leading <br> breaks it onto its own line below the standard
- * "View version X details" / "update now" links so the sandbox-test offer
- * reads as a distinct alternative.
+ * Build the sandbox-link HTML fragment to append to an update notice. The
+ * whole sentence is the link so translators handle it as a unit (no
+ * placeholder splitting). The leading <br> breaks it onto its own line
+ * below the standard "View version X details" / "update now" links.
  */
-function build_link_html( string $key, string $query_arg, string $data_attr, string $label ): string {
+function build_link_html( string $key, string $query_arg, string $data_attr ): string {
 	$run_url = get_run_page_url();
 	$href    = add_query_arg( $query_arg, $key, $run_url );
 
-	return '<br>' . sprintf(
-		/* translators: %s: link to test the update in the Live Sandbox Editor. */
-		esc_html__( 'Or %s.', 'live-sandbox-editor' ),
-		sprintf(
-			'<a href="%s" class="lse-test-upgrade-link" %s="%s">%s</a>',
-			esc_url( $href ),
-			esc_attr( $data_attr ),
-			esc_attr( $key ),
-			esc_html( $label )
-		)
+	return sprintf(
+		'<br><a href="%s" class="lse-test-upgrade-link" %s="%s">%s</a>',
+		esc_url( $href ),
+		esc_attr( $data_attr ),
+		esc_attr( $key ),
+		esc_html__( 'Click here to test the new version before you upgrade.', 'live-sandbox-editor' )
 	);
 }
 
@@ -260,9 +252,9 @@ function build_link_html( string $key, string $query_arg, string $data_attr, str
  * Backbone template, so there's no per-card PHP hook to attach to. The
  * module at src/themes-grid.ts walks the DOM, observes re-renders, and
  * captures clicks before themes.js's delegated handler hijacks the link.
- * Host-side data (href map + label + translation fragments) is forwarded
- * via the `script_module_data_{$module_id}` filter and consumed in JS
- * through the same `wp-script-module-data-…` element that AppData uses.
+ * Host-side data (href map + link sentence) is forwarded via the
+ * `script_module_data_{$module_id}` filter and consumed in JS through the
+ * same `wp-script-module-data-…` element that AppData uses.
  */
 function enqueue_themes_grid_module( string $hook_suffix ): void {
 	if ( 'themes.php' !== $hook_suffix ) {
@@ -280,16 +272,7 @@ function enqueue_themes_grid_module( string $hook_suffix ): void {
 	foreach ( array_keys( $updates->response ) as $slug ) {
 		$hrefs[ (string) $slug ] = add_query_arg( 'testThemeUpgrade', $slug, $run_url );
 	}
-	$label = __( 'test the theme update in the sandbox', 'live-sandbox-editor' );
-	/* translators: %s: link to test the update in the Live Sandbox Editor. */
-	$or_label = __( 'Or %s.', 'live-sandbox-editor' );
-	// Split on the PHP side so JS never has to know about gettext placeholder
-	// shapes — translations may legally use `%1$s` instead of `%s`. If the
-	// translation drops the placeholder entirely (broken catalog), fall back
-	// to the source string's split.
-	$or_parts  = preg_split( '/%(?:\d+\$)?s/', $or_label, 2 );
-	$or_prefix = ( is_array( $or_parts ) && isset( $or_parts[1] ) ) ? $or_parts[0] : 'Or ';
-	$or_suffix = ( is_array( $or_parts ) && isset( $or_parts[1] ) ) ? $or_parts[1] : '.';
+	$label = __( 'Click here to test the new version before you upgrade.', 'live-sandbox-editor' );
 
 	$module_id = Live_Sandbox_Editor\SLUG . '-themes-grid';
 	wp_enqueue_script_module(
@@ -300,12 +283,10 @@ function enqueue_themes_grid_module( string $hook_suffix ): void {
 	);
 	add_filter(
 		"script_module_data_{$module_id}",
-		static function () use ( $hrefs, $label, $or_prefix, $or_suffix ) {
+		static function () use ( $hrefs, $label ) {
 			return array(
-				'hrefs'     => $hrefs,
-				'label'     => $label,
-				'orPrefix'  => $or_prefix,
-				'orSuffix'  => $or_suffix,
+				'hrefs' => $hrefs,
+				'label' => $label,
 			);
 		}
 	);

@@ -69,8 +69,6 @@ export interface TestThemeUpgradePayload {
 export interface ThemesGridData {
 	hrefs: Record<string, string>;
 	label: string;
-	orPrefix: string;
-	orSuffix: string;
 }
 
 export function getModuleData<T>(moduleId: string): T {

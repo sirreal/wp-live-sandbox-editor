@@ -1,6 +1,6 @@
 import { getModuleData, type ThemesGridData } from './types.js';
 
-const { hrefs, label, orPrefix, orSuffix } = getModuleData<ThemesGridData>(
+const { hrefs, label } = getModuleData<ThemesGridData>(
 	'live-sandbox-editor-themes-grid',
 );
 
@@ -48,9 +48,7 @@ function append(card: Element): void {
 	link.setAttribute('data-lse-test-theme-upgrade', slug ?? '');
 
 	p.appendChild(document.createElement('br'));
-	p.appendChild(document.createTextNode(orPrefix));
 	p.appendChild(link);
-	p.appendChild(document.createTextNode(orSuffix));
 }
 
 function processAll(): void {
