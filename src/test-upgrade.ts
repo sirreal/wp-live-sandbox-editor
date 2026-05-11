@@ -93,12 +93,13 @@ async function runUpgrade(
  * `client.run()` would use a different session token (no LOGGED_IN cookie)
  * and trip "link expired."
  *
- * The matcher extracts every `update.php?…` URL on the page and parses its
- * query string with `URLSearchParams`, so query-arg order doesn't matter and
- * extra args injected by core or another plugin don't break the lookup.
- * Matches both `/wp-admin/update.php?…` and bare `update.php?…` (the form
- * emitted by themes.php's Backbone template); the result is rebuilt against
- * `adminPath` for navigation.
+ * Anchors for plugins.php (and the network-admin themes list table) are
+ * PHP-rendered, so `DOMParser` + `URLSearchParams` does the lookup directly.
+ * Single-site themes.php hands the per-theme `update` HTML to a Backbone
+ * template via the `_wpThemeSettings` JSON literal inside an inline
+ * `<script>`; the upgrade URL never makes it into the live DOM at request
+ * time. For that path we lift the literal out of the script body, then
+ * parse the `update` fragment as its own document.
  */
 async function findUpgradeUrl(
 	client: PlaygroundClient,
@@ -121,29 +122,93 @@ async function findUpgradeUrl(
 	});
 
 	const response = await client.request({ url: kind.listingPath });
-	// esc_url() can emit either &amp; or &#038; for query separators in admin
-	// link hrefs. Normalize to plain & before parsing.
-	const normalized = response.text.replace(/&(?:amp;|#038;)/g, '&');
+	const doc = new DOMParser().parseFromString(response.text, 'text/html');
 
-	// Excluding `\` as well as quotes/angle brackets: themes.php emits the
-	// upgrade URL inside JSON-encoded HTML (e.g. `data-update=\"…\"`),
-	// where the URL's terminating quote is preceded by a `\`. Without
-	// excluding the backslash we'd capture it into the match, corrupt
-	// the trailing nonce, and update.php would respond "link expired."
-	const urlRe = /update\.php\?[^\s"'<>\\]+/gi;
-	for (const m of normalized.matchAll(urlRe)) {
-		const url = m[0];
-		const qIdx = url.indexOf('?');
-		const params = new URLSearchParams(url.slice(qIdx + 1));
-		if (
-			params.get('action') === kind.action &&
-			params.get(kind.keyParam) === kind.keyValue &&
-			params.get('_wpnonce')
-		) {
-			return `${adminPath}${url}`;
+	const selector = `a[href*="action=${kind.action}"]`;
+	for (const a of doc.querySelectorAll(selector)) {
+		const tail = matchUpdatePath(a.getAttribute('href') ?? '', kind);
+		if (tail) return `${adminPath}${tail}`;
+	}
+
+	if (kind.action === 'upgrade-theme') {
+		const tail = findInBackboneThemeData(doc, kind, selector);
+		if (tail) return `${adminPath}${tail}`;
+	}
+
+	throw new Error(kind.notFoundError);
+}
+
+function matchUpdatePath(href: string, kind: UpgradeKind): string | null {
+	const idx = href.indexOf('update.php?');
+	if (idx === -1) return null;
+	const tail = href.slice(idx);
+	const params = new URLSearchParams(tail.slice(tail.indexOf('?') + 1));
+	return params.get('action') === kind.action &&
+		params.get(kind.keyParam) === kind.keyValue &&
+		params.get('_wpnonce')
+		? tail
+		: null;
+}
+
+function findInBackboneThemeData(
+	doc: Document,
+	kind: UpgradeKind,
+	selector: string,
+): string | null {
+	for (const script of doc.querySelectorAll('script')) {
+		const text = script.textContent ?? '';
+		if (!text.includes('_wpThemeSettings')) continue;
+		const literal = extractObjectLiteral(text, '_wpThemeSettings');
+		if (!literal) continue;
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(literal);
+		} catch {
+			continue;
+		}
+		const themes = (
+			parsed as { themes?: Array<{ id?: unknown; update?: unknown }> }
+		).themes;
+		if (!Array.isArray(themes)) continue;
+		const theme = themes.find((t) => t.id === kind.keyValue);
+		if (!theme || typeof theme.update !== 'string') continue;
+		const frag = new DOMParser().parseFromString(theme.update, 'text/html');
+		for (const a of frag.querySelectorAll(selector)) {
+			const tail = matchUpdatePath(a.getAttribute('href') ?? '', kind);
+			if (tail) return tail;
 		}
 	}
-	throw new Error(kind.notFoundError);
+	return null;
+}
+
+// Pull the first `{...}` object literal assigned to `name` out of a JS
+// source string. Counts braces while skipping over JSON/JS string
+// contents so `}` inside string values doesn't terminate the match.
+function extractObjectLiteral(source: string, name: string): string | null {
+	const re = new RegExp(String.raw`\b${name}\b\s*=\s*`);
+	const m = re.exec(source);
+	if (!m) return null;
+	const open = source.indexOf('{', m.index + m[0].length);
+	if (open === -1) return null;
+	let depth = 0;
+	let inStr: string | null = null;
+	let esc = false;
+	for (let i = open; i < source.length; i++) {
+		const c = source[i];
+		if (inStr) {
+			if (esc) esc = false;
+			else if (c === '\\') esc = true;
+			else if (c === inStr) inStr = null;
+			continue;
+		}
+		if (c === '"' || c === "'") inStr = c;
+		else if (c === '{') depth++;
+		else if (c === '}') {
+			depth--;
+			if (depth === 0) return source.slice(open, i + 1);
+		}
+	}
+	return null;
 }
 
 /**
