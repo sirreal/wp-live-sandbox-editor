@@ -84,8 +84,13 @@ async function findUpgradeUrl(
 	const normalized = response.text.replace(/&(?:amp;|#038;)/g, '&');
 
 	// Match every update.php URL on the page; the negated character class
-	// chops at HTML attribute and tag boundaries.
-	const urlRe = /\/wp-admin\/update\.php\?[^\s"'<>]+/gi;
+	// chops at HTML attribute and tag boundaries. The `/wp-admin/` prefix
+	// is optional because themes.php's Backbone template renders bare
+	// `update.php?…` hrefs (the host-resolved form). Normalize to the
+	// `/wp-admin/update.php?…` path before returning so `client.goTo`
+	// lands at a stable, docroot-relative location regardless of which
+	// form the page emitted.
+	const urlRe = /(?:\/wp-admin\/)?update\.php\?[^\s"'<>]+/gi;
 	for (const m of normalized.matchAll(urlRe)) {
 		const url = m[0];
 		const qIdx = url.indexOf('?');
@@ -95,7 +100,8 @@ async function findUpgradeUrl(
 			params.get(kind.keyParam) === kind.keyValue &&
 			params.get('_wpnonce')
 		) {
-			return url;
+			const idx = url.indexOf('update.php?');
+			return `/wp-admin/${url.slice(idx)}`;
 		}
 	}
 	throw new Error(kind.notFoundError);

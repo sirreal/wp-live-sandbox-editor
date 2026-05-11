@@ -206,14 +206,24 @@ function print_themes_grid_script(): void {
 	foreach ( array_keys( $updates->response ) as $slug ) {
 		$hrefs[ (string) $slug ] = add_query_arg( 'testThemeUpgrade', $slug, $run_url );
 	}
-	$label    = __( 'test the theme update in the sandbox', 'live-sandbox-editor' );
+	$label = __( 'test the theme update in the sandbox', 'live-sandbox-editor' );
+	/* translators: %s: link to test the update in the Live Sandbox Editor. */
 	$or_label = __( 'Or %s.', 'live-sandbox-editor' );
+	// Split on the PHP side so JS never has to know about gettext placeholder
+	// shapes — translations may legally use `%1$s` instead of `%s`, and a
+	// naive `split('%s')` in JS would then mis-format. If the translation
+	// drops the placeholder entirely (broken catalog), fall back to the
+	// source string's split.
+	$or_parts  = preg_split( '/%(?:\d+\$)?s/', $or_label, 2 );
+	$or_prefix = ( is_array( $or_parts ) && isset( $or_parts[1] ) ) ? $or_parts[0] : 'Or ';
+	$or_suffix = ( is_array( $or_parts ) && isset( $or_parts[1] ) ) ? $or_parts[1] : '.';
 	?>
 	<script>
 	(function() {
 		var hrefs = <?php echo wp_json_encode( $hrefs ); ?>;
 		var linkLabel = <?php echo wp_json_encode( $label ); ?>;
-		var orFmt = <?php echo wp_json_encode( $or_label ); ?>;
+		var orPrefix = <?php echo wp_json_encode( $or_prefix ); ?>;
+		var orSuffix = <?php echo wp_json_encode( $or_suffix ); ?>;
 
 		// Capture-phase listener fires before themes.js's bubble-phase
 		// delegation on `.update-message`, covering both JS-injected cards
@@ -251,11 +261,10 @@ function print_themes_grid_script(): void {
 			link.textContent = linkLabel;
 			link.setAttribute('data-lse-test-theme-upgrade', slug);
 
-			var parts = orFmt.split('%s');
 			p.appendChild(document.createElement('br'));
-			p.appendChild(document.createTextNode(parts[0] || ''));
+			p.appendChild(document.createTextNode(orPrefix));
 			p.appendChild(link);
-			p.appendChild(document.createTextNode(parts[1] || ''));
+			p.appendChild(document.createTextNode(orSuffix));
 		}
 
 		function processAll() {
