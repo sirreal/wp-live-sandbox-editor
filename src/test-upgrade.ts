@@ -1,5 +1,6 @@
 import type { PlaygroundClient } from '@wp-playground/client';
 import { phpStringLiteral } from './playground.js';
+import testUpgradeInterceptMuPhp from './test-upgrade-intercept.mu.php?raw';
 import type {
 	TestPluginUpgradePayload,
 	TestThemeUpgradePayload,
@@ -219,103 +220,29 @@ function extractObjectLiteral(source: string, name: string): string | null {
 }
 
 /**
- * Write the mu-plugin that intercepts
- * `api.wordpress.org/{plugins,themes}-update-check` HTTP requests and
- * returns a synthetic response built from the `lse_test_upgrade_payload`
- * option. The file is overwritten on every call — functionally idempotent,
- * not literally; the content is identical each run so the overwrite is a
- * no-op for behavior. Each test-upgrade run rewrites the option just
- * before navigating, so the same mu-plugin serves both plugin and theme
- * flows.
+ * Drop the `pre_http_request` interceptor mu-plugin into Playground.
+ * The source lives at src/test-upgrade-intercept.mu.php and is bundled
+ * via Vite's `?raw` import — same pattern as the iframe-target-fix and
+ * uploads-passthrough mu-plugins in playground.ts.
+ *
+ * The mu-plugin reads `lse_test_upgrade_payload` (rewritten by each
+ * test-upgrade run via `buildPluginPayloadPhp` / `buildThemePayloadPhp`)
+ * to synthesize a .org response, so both plugin and theme flows share
+ * the same installer.
  */
 async function installInterceptor(
 	client: PlaygroundClient,
 	docroot: string,
 ): Promise<void> {
-	const muPluginPhp = `<?php
-add_filter( 'pre_http_request', function ( $pre, $args, $url ) {
-	if ( ! is_string( $url ) ) {
-		return $pre;
-	}
-	$is_themes  = false !== strpos( $url, 'api.wordpress.org/themes/update-check' );
-	$is_plugins = false !== strpos( $url, 'api.wordpress.org/plugins/update-check' );
-	if ( ! $is_themes && ! $is_plugins ) {
-		return $pre;
-	}
-
-	$payload = get_option( 'lse_test_upgrade_payload', null );
-	if ( ! is_array( $payload ) || empty( $payload['kind'] ) ) {
-		return $pre;
-	}
-
-	$body = array(
-		'plugins'      => (object) array(),
-		'themes'       => (object) array(),
-		'no_update'    => (object) array(),
-		'translations' => array(),
-	);
-
-	if ( $is_themes && 'theme' === $payload['kind'] ) {
-		$slug = (string) ( $payload['slug'] ?? '' );
-		if ( '' !== $slug ) {
-			$new_version = (string) ( $payload['new_version'] ?? '' );
-			$entry       = array(
-				'theme'        => $slug,
-				'new_version'  => $new_version,
-				'url'          => (string) ( $payload['url'] ?? '' ),
-				'package'      => (string) ( $payload['package'] ?? '' ),
-				'requires'     => (string) ( $payload['requires'] ?? '' ),
-				'requires_php' => (string) ( $payload['requires_php'] ?? '' ),
-			);
-			// Route to no_update once the on-disk version has caught up,
-			// otherwise themes.php would keep flashing the upgrade notice
-			// after a successful test upgrade.
-			$installed = (string) wp_get_theme( $slug )->get( 'Version' );
-			$bucket    = ( '' !== $installed && version_compare( $installed, $new_version, '>=' ) ) ? 'no_update' : 'themes';
-			$body[ $bucket ] = array( $slug => $entry );
-		}
-	} elseif ( $is_plugins && 'plugin' === $payload['kind'] ) {
-		$entry_path = (string) ( $payload['plugin'] ?? '' );
-		$slug       = (string) ( $payload['slug'] ?? '' );
-		if ( '' !== $entry_path ) {
-			$new_version = (string) ( $payload['new_version'] ?? '' );
-			$info        = array(
-				'id'           => 'w.org/plugins/' . $slug,
-				'slug'         => $slug,
-				'plugin'       => $entry_path,
-				'new_version'  => $new_version,
-				'url'          => (string) ( $payload['url'] ?? '' ),
-				'package'      => (string) ( $payload['package'] ?? '' ),
-				'requires'     => (string) ( $payload['requires'] ?? '' ),
-				'requires_php' => (string) ( $payload['requires_php'] ?? '' ),
-			);
-			if ( ! function_exists( 'get_plugins' ) ) {
-				require_once ABSPATH . 'wp-admin/includes/plugin.php';
-			}
-			$all_plugins     = get_plugins();
-			$installed       = isset( $all_plugins[ $entry_path ]['Version'] ) ? (string) $all_plugins[ $entry_path ]['Version'] : '';
-			$bucket          = ( '' !== $installed && version_compare( $installed, $new_version, '>=' ) ) ? 'no_update' : 'plugins';
-			$body[ $bucket ] = array( $entry_path => $info );
-		}
-	}
-
-	return array(
-		'response' => array( 'code' => 200, 'message' => 'OK' ),
-		'headers'  => array(),
-		'body'     => wp_json_encode( $body ),
-		'cookies'  => array(),
-		'filename' => null,
-	);
-}, 1, 3 );
-`;
-	const muPluginEscaped = muPluginPhp
-		.replace(/\\/g, '\\\\')
-		.replace(/'/g, "\\'");
+	const muDir = `${docroot}/wp-content/mu-plugins`;
 	await client.run({
 		code: `<?php
-			$dir = '${docroot}/wp-content/mu-plugins';
+			$dir = ${phpStringLiteral(muDir)};
 			@mkdir( $dir, 0755, true );
-			file_put_contents( $dir . '/lse-test-upgrade-intercept.php', '${muPluginEscaped}' );
+			file_put_contents(
+				$dir . '/lse-test-upgrade-intercept.php',
+				${phpStringLiteral(testUpgradeInterceptMuPhp)}
+			);
 		`,
 	});
 }
