@@ -5,6 +5,7 @@
 		"checkJs": true,
 		"module": "ESNext",
 		"moduleResolution": "bundler",
+		"target": "ESNext",
 		"lib": ["DOM", "DOM.Iterable", "ESNext"],
 		"noEmit": true,
 		"paths": {}

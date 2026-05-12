@@ -20,9 +20,10 @@ use FileTreeProducer;
 use WP_REST_Request;
 use WordPress\DataLiberation\MySQLDumpProducer;
 
-const SLUG       = 'live-sandbox-editor';
-const SETUP_SLUG = 'live-sandbox-editor-setup';
-const VERSION    = '0.1';
+const SLUG        = 'live-sandbox-editor';
+const SETUP_SLUG  = 'live-sandbox-editor-setup';
+const VERSION     = '0.1';
+const PLUGIN_FILE = __FILE__;
 
 require_once __DIR__ . '/inc/sync-stream.php';
 require_once __DIR__ . '/inc/manifest.php';
@@ -167,17 +168,80 @@ function page_for_screen( string $hook_or_screen_id ): ?string {
  * @return array<string,mixed>
  */
 function app_data( array $data ): array {
-	return array_merge(
-		$data,
-		array(
-			'restUrl'     => rest_url( SLUG . '/v1' ),
-			'nonce'       => wp_create_nonce( 'wp_rest' ),
-			'siteUrl'     => get_site_url(),
-			'runUrl'      => menu_page_url( SLUG, false ),
-			'scriptDebug' => defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG,
-			'wpDebug'     => defined( 'WP_DEBUG' ) && WP_DEBUG,
-		)
+	$extras = array(
+		'restUrl'        => rest_url( SLUG . '/v1' ),
+		'nonce'          => wp_create_nonce( 'wp_rest' ),
+		'siteUrl'        => get_site_url(),
+		'runUrl'         => menu_page_url( SLUG, false ),
+		'scriptDebug'    => defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG,
+		'wpDebug'        => defined( 'WP_DEBUG' ) && WP_DEBUG,
+		// Major.minor only — Playground's blueprint `preferredVersions`
+		// accepts that shape plus 'latest'/'beta'/'nightly', not full
+		// patches. Sandbox boots on the host's WP+PHP series so admin
+		// chrome, list-table HTML, and available APIs match.
+		'wpVersion'      => normalize_version( $GLOBALS['wp_version'] ?? '' ),
+		'phpVersion'     => playground_php_version( PHP_VERSION ),
+		// JS consumers (pre-sync cleanup) need to know LSE's own
+		// directory name so they don't prune it. SLUG is the canonical
+		// host-side identifier — sharing it keeps that single source of
+		// truth.
+		'selfPluginSlug' => SLUG,
 	);
+
+	// When the Run page is reached via a "test … in sandbox" link, lift
+	// the host's update_{plugins,themes} response row for the targeted
+	// item into AppData. Playground writes a synthetic transient with
+	// these fields (see src/test-upgrade.ts) so the upgrade notice + nonce
+	// render against the just-synced filesystem without hitting
+	// api.wordpress.org from inside the sandbox — that endpoint round-trip
+	// has been observed to silently fail for themes-update-check.
+	//
+	// phpcs:disable WordPress.Security.NonceVerification.Recommended -- The Run page is gated by `manage_options` (asserted again inside Test_Upgrade\get_*_update_payload), and the read $_GET values are constrained to the safe-charset matchers below before they reach any other code.
+	if ( isset( $_GET['testUpgrade'] ) && is_string( $_GET['testUpgrade'] ) ) {
+		$entry = sanitize_text_field( wp_unslash( $_GET['testUpgrade'] ) );
+		if ( Manifest\is_safe_plugin_entry( $entry ) ) {
+			$payload = Test_Upgrade\get_plugin_update_payload( $entry );
+			if ( null !== $payload ) {
+				$extras['testPluginUpgradePayload'] = $payload;
+			}
+		}
+	}
+	if ( isset( $_GET['testThemeUpgrade'] ) && is_string( $_GET['testThemeUpgrade'] ) ) {
+		$slug = sanitize_text_field( wp_unslash( $_GET['testThemeUpgrade'] ) );
+		if ( Manifest\is_safe_theme_slug( $slug ) ) {
+			$payload = Test_Upgrade\get_theme_update_payload( $slug );
+			if ( null !== $payload ) {
+				$extras['testThemeUpgradePayload'] = $payload;
+			}
+		}
+	}
+	// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+	return array_merge( $data, $extras );
+}
+
+/**
+ * Reduce a WP or PHP version string to `major.minor`, the shape
+ * Playground's `preferredVersions` accepts. Returns empty string on
+ * unparseable input so the JS side can fall back to its defaults.
+ *
+ * @param string $raw Raw version string.
+ * @return string Major.minor, or '' on failure.
+ */
+function normalize_version( string $raw ): string {
+	return preg_match( '/^(\d+\.\d+)/', $raw, $m ) ? $m[1] : '';
+}
+
+/**
+ * Like `normalize_version()` but constrained to PHP series Playground's
+ * blueprint accepts. Anything outside the allowlist (e.g. a host on a
+ * future or dev build) returns '' so the JS side falls back to its
+ * default — preventing a hard boot error from a one-off host version.
+ */
+function playground_php_version( string $raw ): string {
+	$mm      = normalize_version( $raw );
+	$allowed = array( '7.0', '7.1', '7.2', '7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4' );
+	return in_array( $mm, $allowed, true ) ? $mm : '';
 }
 
 /**

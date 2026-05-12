@@ -1,8 +1,14 @@
-import type { PlaygroundClient } from '@wp-playground/client';
+import type {
+	BlueprintPHPVersion,
+	PlaygroundClient,
+} from '@wp-playground/client';
 import iframeTargetFixMuPhp from './iframe-target-fix.mu.php?raw';
 import postImportFixupsPhp from './post-import-fixups.php?raw';
 import { BatchedDiskFlusher, readSyncStream } from './streaming.js';
-import type { TestUpgradeRequest } from './types.js';
+import type {
+	TestPluginUpgradePayload,
+	TestThemeUpgradePayload,
+} from './types.js';
 import { getAppData } from './types.js';
 import uploadsPassthroughMuPhp from './uploads-passthrough.mu.php?raw';
 
@@ -42,17 +48,32 @@ export async function initPlayground(
 	onStatus: (status: string) => void,
 	debug: DebugSettings,
 	manifestOverride?: SyncManifest,
-	testUpgrade?: TestUpgradeRequest,
+	testPluginUpgrade?: TestPluginUpgradePayload,
+	testThemeUpgrade?: TestThemeUpgradePayload,
 ): Promise<PlaygroundClient> {
 	const debugMode = debug.scriptDebug || debug.wpDebug;
 	const { startPlaygroundWeb } = await import('@wp-playground/client');
 
+	// Mirror the host's WP+PHP series so admin chrome, list-table HTML
+	// and available APIs match what the user sees locally. Falls back to
+	// Playground's defaults if app_data() couldn't normalize the host
+	// version (empty string).
+	const { wpVersion, phpVersion } = getAppData();
 	onStatus('Booting Playground…');
 	const client = await startPlaygroundWeb({
 		iframe,
 		remoteUrl: 'https://playground.wordpress.net/remote.html',
 		blueprint: {
-			preferredVersions: { wp: 'latest', php: '8.2' },
+			preferredVersions: {
+				wp: wpVersion || 'latest',
+				// Playground's blueprint types `php` as a strict union of
+				// supported versions; we coerce here because the host's
+				// `major.minor` is validated upstream by the regex in
+				// `Live_Sandbox_Editor\normalize_version()` — anything
+				// outside Playground's supported set will surface as a
+				// boot error the user can react to.
+				php: (phpVersion || '8.2') as BlueprintPHPVersion | 'latest',
+			},
 			steps: [{ step: 'login', username: 'admin', password: 'password' }],
 		},
 	});
@@ -64,8 +85,14 @@ export async function initPlayground(
 	onStatus('Resolving sync manifest…');
 	const manifestResp = await fetchManifest();
 	const manifest = manifestOverride ?? manifestResp.manifest;
-	if (testUpgrade && !manifest.plugins.includes(testUpgrade.entry)) {
-		manifest.plugins = [...manifest.plugins, testUpgrade.entry];
+	if (
+		testPluginUpgrade &&
+		!manifest.plugins.includes(testPluginUpgrade.plugin)
+	) {
+		manifest.plugins = [...manifest.plugins, testPluginUpgrade.plugin];
+	}
+	if (testThemeUpgrade && !manifest.themes.includes(testThemeUpgrade.slug)) {
+		manifest.themes = [...manifest.themes, testThemeUpgrade.slug];
 	}
 	const dbContext: ManifestResponse = { ...manifestResp, manifest };
 
@@ -80,6 +107,9 @@ export async function initPlayground(
 	const hasDb = manifest.tables.length > 0;
 
 	if (hasFiles) {
+		onStatus('Cleaning Playground defaults…');
+		await cleanupPlaygroundDefaults(client, manifest, debugMode);
+
 		onStatus('Importing site files…');
 		await importFiles(client, manifest, debugMode);
 	}
@@ -177,6 +207,138 @@ async function postManifestStream(
 		},
 		body: JSON.stringify(manifest),
 	});
+}
+
+/**
+ * Remove every top-level entry under `wp-content/{plugins,themes}/`
+ * that isn't in the manifest. Playground's bundled WP install ships
+ * `akismet/`, `hello.php`, and the current default theme — without
+ * this pass they'd linger after sync and show up in plugins.php /
+ * themes.php as phantoms that aren't on the host.
+ *
+ * Scope is deliberately narrow: only the two `wp-content/{plugins,
+ * themes}` roots are touched. `mu-plugins/` (Playground installs
+ * system mu-plugins like sqlite-database-integration, and we install
+ * `lse-test-upgrade-intercept.php` etc.), `uploads/`, `lib/`, and
+ * `drop-ins/` are left alone.
+ *
+ * Symlinks at the root are `unlink`'d directly, never traversed —
+ * Playground's VFS shouldn't produce any, but it's defense in depth
+ * against ever walking out of the docroot.
+ *
+ * Caller's empty-manifest guard (both `plugins` and `themes` empty)
+ * skips this entirely so a malformed manifest can't nuke the sandbox
+ * before any sync brings files in.
+ */
+async function cleanupPlaygroundDefaults(
+	client: PlaygroundClient,
+	manifest: SyncManifest,
+	debugMode: boolean,
+): Promise<void> {
+	if (manifest.plugins.length === 0 && manifest.themes.length === 0) {
+		if (debugMode) {
+			console.warn('[live-sandbox-editor] cleanup: empty manifest, skipping');
+		}
+		return;
+	}
+
+	const docroot = await client.documentRoot;
+	const { selfPluginSlug } = getAppData();
+
+	// Plugin manifest entries are `slug/main.php` (multi-file) or
+	// `single.php` (single-file). Top-level basename is the part
+	// before the slash, or the whole entry for single-file. The
+	// `index.php` is WP's silence stub; the self-plugin entries are
+	// defense-in-depth (sync already excludes self).
+	// `manifestOverride` reaches us straight from the `?manifest=` query
+	// param, so the array contents aren't type-checked. Drop non-strings
+	// before deriving the allowlist — without this, `e.indexOf('/')` throws
+	// on `[1, true, null]` shaped input and aborts the boot.
+	const pluginEntries = manifest.plugins.filter(
+		(e): e is string => typeof e === 'string',
+	);
+	const themeEntries = manifest.themes.filter(
+		(e): e is string => typeof e === 'string',
+	);
+	const pluginAllow = new Set<string>([
+		...pluginEntries.map((e) => {
+			const slash = e.indexOf('/');
+			return slash === -1 ? e : e.slice(0, slash);
+		}),
+		'index.php',
+		selfPluginSlug,
+		`${selfPluginSlug}.php`,
+	]);
+	const themeAllow = new Set<string>([
+		...themeEntries,
+		'index.php',
+		selfPluginSlug,
+	]);
+
+	const pluginAllowPhp = phpArrayLiteral([...pluginAllow]);
+	const themeAllowPhp = phpArrayLiteral([...themeAllow]);
+
+	const result = await client.run({
+		code: `<?php
+			$plugin_dir = ${phpStringLiteral(`${docroot}/wp-content/plugins`)};
+			$theme_dir  = ${phpStringLiteral(`${docroot}/wp-content/themes`)};
+			$plugin_allow = array_flip( ${pluginAllowPhp} );
+			$theme_allow  = array_flip( ${themeAllowPhp} );
+
+			$rm_recursive = function ( string $path ) {
+				if ( is_link( $path ) ) { @unlink( $path ); return; }
+				if ( ! file_exists( $path ) ) { return; }
+				if ( is_file( $path ) ) { @unlink( $path ); return; }
+				// Depth-first: rmdir refuses non-empty dirs.
+				$rdi = new RecursiveDirectoryIterator(
+					$path,
+					FilesystemIterator::SKIP_DOTS | FilesystemIterator::CURRENT_AS_FILEINFO
+				);
+				$rii = new RecursiveIteratorIterator( $rdi, RecursiveIteratorIterator::CHILD_FIRST );
+				foreach ( $rii as $f ) {
+					if ( $f->isLink() || $f->isFile() ) {
+						@unlink( $f->getPathname() );
+					} elseif ( $f->isDir() ) {
+						@rmdir( $f->getPathname() );
+					}
+				}
+				@rmdir( $path );
+			};
+
+			$prune = function ( string $dir, array $allow ) use ( $rm_recursive ) {
+				if ( ! is_dir( $dir ) ) { return array(); }
+				$entries = @scandir( $dir );
+				if ( false === $entries ) { return array(); }
+				$removed = array();
+				foreach ( $entries as $e ) {
+					if ( '.' === $e || '..' === $e ) { continue; }
+					if ( isset( $allow[ $e ] ) ) { continue; }
+					$rm_recursive( $dir . '/' . $e );
+					$removed[] = $e;
+				}
+				return $removed;
+			};
+
+			$plugins_removed = $prune( $plugin_dir, $plugin_allow );
+			$themes_removed  = $prune( $theme_dir, $theme_allow );
+			${debugMode ? `echo json_encode( array( 'plugins' => $plugins_removed, 'themes' => $themes_removed ) );` : ''}
+		`,
+	});
+
+	if (debugMode && result.text) {
+		try {
+			const summary = JSON.parse(result.text) as {
+				plugins: string[];
+				themes: string[];
+			};
+			console.log('[live-sandbox-editor] cleanup removed:', summary);
+		} catch {
+			console.warn(
+				'[live-sandbox-editor] cleanup: unparsable result',
+				result.text,
+			);
+		}
+	}
 }
 
 async function importFiles(
@@ -402,9 +564,15 @@ async function runSqlFromDisk(
 	}
 }
 
-function phpStringLiteral(s: string): string {
-	// PHP single-quoted: escape backslashes and single quotes only.
+// PHP single-quoted: escape backslashes and single quotes only. Exported so
+// other modules that generate inline PHP (e.g. test-upgrade.ts) can share a
+// single escaping implementation — drift here is a code-injection risk.
+export function phpStringLiteral(s: string): string {
 	return `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+}
+
+function phpArrayLiteral(items: string[]): string {
+	return `array(${items.map(phpStringLiteral).join(', ')})`;
 }
 
 interface RewriteCtx {

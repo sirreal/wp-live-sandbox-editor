@@ -3,14 +3,19 @@ import { initFileExplorer } from './file-explorer.js';
 import { readFile, writeFile } from './filesystem.js';
 import type { SyncManifest } from './playground.js';
 import { registerMonacoThemeSetter, sandbox } from './store.js';
-import type { OpenFile, TestUpgradeRequest } from './types.js';
+import type {
+	OpenFile,
+	TestPluginUpgradePayload,
+	TestThemeUpgradePayload,
+} from './types.js';
 
 type EditorMod = typeof import('./editor.js');
 
 export async function initApp(
 	root: HTMLElement,
 	manifestOverride?: SyncManifest,
-	testUpgrade?: TestUpgradeRequest,
+	testPluginUpgrade?: TestPluginUpgradePayload,
+	testThemeUpgrade?: TestThemeUpgradePayload,
 ): Promise<void> {
 	const tabStrip = mustQuery(root, '#lse-tabs');
 	const monacoContainer = mustQuery(root, '#lse-monaco');
@@ -152,7 +157,8 @@ export async function initApp(
 	const client = await sandbox.actions.boot(
 		iframe,
 		manifestOverride,
-		testUpgrade,
+		testPluginUpgrade,
+		testThemeUpgrade,
 	);
 	if (!client) return;
 
