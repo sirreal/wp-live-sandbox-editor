@@ -76,3 +76,68 @@ jobs:
         with:
           build-dir: ./live-sandbox-editor
           strict: true
+
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+
+      # The plugin's runtime depends on wp-php-toolkit/reprint-exporter
+      # (see live-sandbox-editor/composer.json) for the sandbox sync
+      # flow. wp-env mounts ../live-sandbox-editor as a plugin, so its
+      # vendor/ must exist before the specs boot Playground.
+      - name: Install plugin Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress --no-dev --working-dir=live-sandbox-editor
+
+      # `npm ci` runs `postinstall: playwright install chromium`, which
+      # downloads the browser binary into ~/.cache/ms-playwright.
+      - name: Install Node dependencies
+        run: npm ci
+
+      # `install-deps` only installs apt packages (libnss3, libatk, …);
+      # the browser binary is already on disk from postinstall.
+      - name: Install Playwright system dependencies
+        run: npx --no-install playwright install-deps chromium
+
+      - name: Build JS bundle
+        run: npm run build
+
+      # `ensureWpEnvRunning()` in playwright.config.ts boots wp-env on
+      # an auto-port at config-load time, so no explicit start step is
+      # needed. retries=1 is wired via the CI env var below.
+      - name: Run Playwright tests
+        run: npx --no-install playwright test
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
