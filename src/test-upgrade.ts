@@ -103,8 +103,9 @@ async function runUpgrade(
  * Single-site themes.php hands the per-theme `update` HTML to a Backbone
  * template via the `_wpThemeSettings` JSON literal inside an inline
  * `<script>`; the upgrade URL never makes it into the live DOM at request
- * time. For that path we lift the literal out of the script body, then
- * parse the `update` fragment as its own document.
+ * time. For that path we evaluate the `#theme-js-extra` initializer inside
+ * a hidden srcdoc iframe to read `_wpThemeSettings` directly, then parse
+ * the per-theme `update` fragment as its own document.
  */
 async function findUpgradeUrl(
 	client: PlaygroundClient,
@@ -135,7 +136,7 @@ async function findUpgradeUrl(
 	}
 
 	if (kind.action === 'upgrade-theme') {
-		const tail = findInBackboneThemeData(doc, kind);
+		const tail = await findThemeUpdateUrl(doc, kind);
 		if (tail) return `${PG_ADMIN}${tail}`;
 	}
 
@@ -154,69 +155,65 @@ function matchUpdatePath(href: string, kind: UpgradeKind): string | null {
 		: null;
 }
 
-function findInBackboneThemeData(
+async function findThemeUpdateUrl(
 	doc: Document,
 	kind: UpgradeKind,
-): string | null {
-	for (const script of doc.querySelectorAll('script')) {
-		const text = script.textContent ?? '';
-		if (!text.includes('_wpThemeSettings')) continue;
-		const literal = extractObjectLiteral(text, '_wpThemeSettings');
-		if (!literal) continue;
-		let parsed: unknown;
-		try {
-			parsed = JSON.parse(literal);
-		} catch {
-			continue;
-		}
-		const themes = (
-			parsed as { themes?: Array<{ id?: unknown; update?: unknown }> }
-		).themes;
-		if (!Array.isArray(themes)) continue;
-		const theme = themes.find((t) => t.id === kind.keyValue);
-		if (!theme || typeof theme.update !== 'string') continue;
-		// `theme.update` is a small `<p>…<a href="update.php?…">…</a></p>`
-		// fragment. Pulling the href via regex (after decoding the two
-		// entities WP's `esc_url` may emit for `&`) avoids re-parsing
-		// JSON-derived text as HTML — a pattern CodeQL flags as a
-		// text→HTML XSS sink even though we only read the matched URL.
-		const decoded = theme.update.replace(/&(?:amp|#038);/g, '&');
-		for (const m of decoded.matchAll(/href=["']([^"']+)["']/gi)) {
-			const tail = matchUpdatePath(m[1] ?? '', kind);
-			if (tail) return tail;
-		}
+): Promise<string | null> {
+	// `#theme-js-extra` is the id `wp_localize_script` emits for the `theme`
+	// handle on single-site themes.php — the only script that ships
+	// `_wpThemeSettings` in core. If WP ever renames the handle this returns
+	// `[]` and the outer `findUpgradeUrl` throws `notFoundError`.
+	const scriptEl = doc.querySelector('#theme-js-extra');
+	if (!scriptEl) return null;
+
+	const themes = await readThemesFromScript(scriptEl.outerHTML);
+	const theme = themes.find((t) => t.id === kind.keyValue);
+	if (!theme || typeof theme.update !== 'string') return null;
+
+	// `theme.update` is a `<p>…<a href="update.php?…">…</a></p>` fragment.
+	// Parsing as HTML and reading the anchor href is fine here because
+	// `matchUpdatePath` below requires a literal `update.php?` path with
+	// the right `action`/key params and a `_wpnonce` — anything else (e.g.
+	// a `javascript:` URI) is rejected before we hand it to `client.goTo`.
+	const updateDoc = new DOMParser().parseFromString(theme.update, 'text/html');
+	for (const a of updateDoc.querySelectorAll(
+		'a[href*="/wp-admin/update.php"]',
+	)) {
+		const tail = matchUpdatePath(a.getAttribute('href') ?? '', kind);
+		if (tail) return tail;
 	}
 	return null;
 }
 
-// Pull the first `{...}` object literal assigned to `name` out of a JS
-// source string. Counts braces while skipping over JSON/JS string
-// contents so `}` inside string values doesn't terminate the match.
-function extractObjectLiteral(source: string, name: string): string | null {
-	const re = new RegExp(String.raw`\b${name}\b\s*=\s*`);
-	const m = re.exec(source);
-	if (!m) return null;
-	const open = source.indexOf('{', m.index + m[0].length);
-	if (open === -1) return null;
-	let depth = 0;
-	let inStr: string | null = null;
-	let esc = false;
-	for (let i = open; i < source.length; i++) {
-		const c = source[i];
-		if (inStr) {
-			if (esc) esc = false;
-			else if (c === '\\') esc = true;
-			else if (c === inStr) inStr = null;
-			continue;
-		}
-		if (c === '"' || c === "'") inStr = c;
-		else if (c === '{') depth++;
-		else if (c === '}') {
-			depth--;
-			if (depth === 0) return source.slice(open, i + 1);
-		}
+// Run WP's `var _wpThemeSettings = {…};` initializer inside a hidden srcdoc
+// iframe and return its `themes` array. Lets the JS engine parse the
+// literal directly — no hand-rolled brace-counter, no `JSON.parse` round
+// trip — at the cost of executing fetched JS in a same-origin iframe.
+// Returns `[]` when the script doesn't set `_wpThemeSettings.themes`; the
+// iframe is always removed before this resolves.
+async function readThemesFromScript(
+	scriptHtml: string,
+): Promise<Array<{ id?: unknown; update?: unknown }>> {
+	const frame = document.createElement('iframe');
+	frame.style.display = 'none';
+	frame.srcdoc = scriptHtml;
+	const loaded = new Promise<void>((resolve) => {
+		frame.addEventListener('load', () => resolve(), { once: true });
+	});
+	document.body.append(frame);
+	try {
+		await loaded;
+		const themes = (
+			frame.contentWindow as unknown as {
+				_wpThemeSettings?: { themes?: unknown };
+			} | null
+		)?._wpThemeSettings?.themes;
+		return Array.isArray(themes)
+			? (themes as Array<{ id?: unknown; update?: unknown }>)
+			: [];
+	} finally {
+		frame.remove();
 	}
-	return null;
 }
 
 /**
