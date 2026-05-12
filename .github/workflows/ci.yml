@@ -113,7 +113,7 @@ jobs:
       # `install-deps` only installs apt packages (libnss3, libatk, …);
       # the browser binary is already on disk from postinstall.
       - name: Install Playwright system dependencies
-        run: npx --no-install playwright install-deps chromium
+        run: node_modules/.bin/playwright install-deps chromium
 
       - name: Build JS bundle
         run: npm run build
@@ -122,7 +122,7 @@ jobs:
       # an auto-port at config-load time, so no explicit start step is
       # needed. retries=1 is wired via the CI env var below.
       - name: Run Playwright tests
-        run: npx --no-install playwright test
+        run: node_modules/.bin/playwright test
 
       - name: Upload Playwright report
         if: failure()
