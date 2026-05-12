@@ -14,7 +14,7 @@ namespace Live_Sandbox_Editor;
 
 \defined( 'ABSPATH' ) || exit;
 
-$theme_options = array(
+$live_sandbox_editor_theme_options = array(
 	array(
 		'value'    => 'system',
 		'label'    => __( 'System', 'live-sandbox-editor' ),
@@ -32,7 +32,7 @@ $theme_options = array(
 	),
 );
 
-$quick_links = array(
+$live_sandbox_editor_quick_links = array(
 	array(
 		'label' => __( 'Homepage', 'live-sandbox-editor' ),
 		'path'  => '/',
@@ -105,7 +105,7 @@ $quick_links = array(
 					hidden
 					data-wp-bind--hidden="!state.urlMenuOpen"
 				>
-					<?php foreach ( $quick_links as $link ) : ?>
+					<?php foreach ( $live_sandbox_editor_quick_links as $link ) : ?>
 						<button
 							type="button"
 							role="menuitem"
@@ -138,16 +138,16 @@ $quick_links = array(
 						role="radiogroup"
 						aria-label="<?php esc_attr_e( 'Editor theme', 'live-sandbox-editor' ); ?>"
 					>
-						<?php foreach ( $theme_options as $option ) : ?>
+						<?php foreach ( $live_sandbox_editor_theme_options as $live_sandbox_editor_option ) : ?>
 							<button
 								type="button"
 								role="radio"
 								class="lse-theme-toggle-option"
-								data-wp-context="<?php echo esc_attr( wp_json_encode( array( 'value' => $option['value'] ) ) ); ?>"
+								data-wp-context="<?php echo esc_attr( wp_json_encode( array( 'value' => $live_sandbox_editor_option['value'] ) ) ); ?>"
 								data-wp-on--click="actions.setThemeMode"
-								data-wp-bind--aria-checked="<?php echo esc_attr( $option['is_state'] ); ?>"
-								data-wp-class--is-active="<?php echo esc_attr( $option['is_state'] ); ?>"
-							><?php echo esc_html( $option['label'] ); ?></button>
+								data-wp-bind--aria-checked="<?php echo esc_attr( $live_sandbox_editor_option['is_state'] ); ?>"
+								data-wp-class--is-active="<?php echo esc_attr( $live_sandbox_editor_option['is_state'] ); ?>"
+							><?php echo esc_html( $live_sandbox_editor_option['label'] ); ?></button>
 						<?php endforeach; ?>
 					</div>
 				</div>

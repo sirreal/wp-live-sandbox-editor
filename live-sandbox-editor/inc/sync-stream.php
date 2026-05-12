@@ -22,6 +22,8 @@
 
 namespace Live_Sandbox_Editor\Sync_Stream;
 
+\defined( 'ABSPATH' ) || exit;
+
 const MARKER_FILE = 'FILE';
 const MARKER_SQL  = 'SQL';
 const MARKER_END  = 'END';
@@ -33,10 +35,16 @@ const MARKER_ERR  = 'ERR';
  * unmodified.
  */
 function setup(): void {
+	// Bail on non-removable buffers (PHP's `output_buffering` ini, an
+	// extension-installed buffer) so we don't spin forever on a level
+	// ob_end_clean() refuses to pop.
 	while ( ob_get_level() > 0 ) {
-		ob_end_clean();
+		$status = ob_get_status();
+		if ( empty( $status['del'] ) || ! ob_end_clean() ) {
+			break;
+		}
 	}
-	// phpcs:ignore WordPress.PHP.IniSet.Risky,WordPress.PHP.NoSilencedErrors.Discouraged -- intentional: streaming response, output buffering / compression must be off; ini_set may be disabled on some hosts.
+	// phpcs:ignore WordPress.PHP.IniSet.Risky,WordPress.PHP.NoSilencedErrors.Discouraged,Squiz.PHP.DiscouragedFunctions.Discouraged -- intentional: streaming response, output buffering / compression must be off; ini_set may be disabled on some hosts.
 	@ini_set( 'zlib.output_compression', '0' );
 	if ( function_exists( 'apache_setenv' ) ) {
 		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.PHP.DiscouragedPHPFunctions.runtime_configuration_apache_setenv -- intentional: streaming response, gzip must be off; apache_setenv is the only way to force this on mod_php.
@@ -45,7 +53,7 @@ function setup(): void {
 	// Streaming a full export comfortably exceeds the default 30s
 	// max_execution_time. Disable up front and reset periodically — some
 	// hosts silently re-impose a per-iteration timer.
-	// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- set_time_limit may be disabled in php.ini; the silence is the intended fallback.
+	// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,Squiz.PHP.DiscouragedFunctions.Discouraged -- intentional: streaming a full export comfortably exceeds the default 30s max_execution_time; the silence covers set_time_limit being disabled in php.ini.
 	@set_time_limit( 0 );
 	ignore_user_abort( true );
 	if ( function_exists( 'session_write_close' ) ) {
