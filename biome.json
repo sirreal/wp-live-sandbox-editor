@@ -21,6 +21,7 @@
 			"*",
 			"src/**",
 			"live-sandbox-editor/**",
+			"!**/worktrees",
 			"!live-sandbox-editor/build",
 			"!live-sandbox-editor/vendor",
 			"!node_modules",
