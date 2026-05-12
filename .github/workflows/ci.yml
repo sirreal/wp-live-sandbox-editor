@@ -105,13 +105,27 @@ jobs:
       - name: Install plugin Composer dependencies
         run: composer install --no-interaction --prefer-dist --no-progress --no-dev --working-dir=live-sandbox-editor
 
+      # Cache the Chromium binary in ~/.cache/ms-playwright keyed on the
+      # exact @playwright/test version from package-lock.json. Must run
+      # before `npm ci` so the postinstall step (`playwright install
+      # chromium`) is a no-op on cache hit.
+      - name: Read Playwright version
+        id: pw
+        run: echo "version=$(jq -r '.packages["node_modules/@playwright/test"].version' package-lock.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
       # `npm ci` runs `postinstall: playwright install chromium`, which
-      # downloads the browser binary into ~/.cache/ms-playwright.
+      # downloads the browser binary on cache miss and skips on hit.
       - name: Install Node dependencies
         run: npm ci
 
       # `install-deps` only installs apt packages (libnss3, libatk, …);
-      # the browser binary is already on disk from postinstall.
+      # the browser binary is already on disk from postinstall or cache.
       - name: Install Playwright system dependencies
         run: node_modules/.bin/playwright install-deps chromium
 
