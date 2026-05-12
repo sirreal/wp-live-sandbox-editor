@@ -35,8 +35,14 @@ const MARKER_ERR  = 'ERR';
  * unmodified.
  */
 function setup(): void {
+	// Bail on non-removable buffers (PHP's `output_buffering` ini, an
+	// extension-installed buffer) so we don't spin forever on a level
+	// ob_end_clean() refuses to pop.
 	while ( ob_get_level() > 0 ) {
-		ob_end_clean();
+		$status = ob_get_status();
+		if ( empty( $status['del'] ) || ! ob_end_clean() ) {
+			break;
+		}
 	}
 	// phpcs:ignore WordPress.PHP.IniSet.Risky,WordPress.PHP.NoSilencedErrors.Discouraged,Squiz.PHP.DiscouragedFunctions.Discouraged -- intentional: streaming response, output buffering / compression must be off; ini_set may be disabled on some hosts.
 	@ini_set( 'zlib.output_compression', '0' );
