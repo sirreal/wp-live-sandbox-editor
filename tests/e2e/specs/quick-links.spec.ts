@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { loginAsAdmin, runPageUrl } from '../helpers/wp-admin.js';
+import { runPageUrl } from '../helpers/wp-admin.js';
 import { urlInput, waitForSandboxReady } from '../helpers/sandbox.js';
 
 const QUICK_LINKS: ReadonlyArray<{ label: string; path: string }> = [
@@ -13,7 +13,6 @@ const QUICK_LINKS: ReadonlyArray<{ label: string; path: string }> = [
 
 test.describe('Quick links menu', () => {
 	test('renders all quick links and navigates to each', async ({ page }) => {
-		await loginAsAdmin(page);
 		await page.goto(runPageUrl());
 		await waitForSandboxReady(page);
 
@@ -26,16 +25,19 @@ test.describe('Quick links menu', () => {
 			await input.click();
 			await expect(menu).toBeVisible();
 
-			const item = menu.getByRole('menuitem', { name: new RegExp(`^${escapeRegex(link.label)}`) });
-			await expect(item).toBeVisible();
+			// Match the menuitem whose label span text equals `link.label`
+			// exactly. Scoping to the label span avoids matching against the
+			// menuitem's full accessible name, which concatenates the label
+			// and path spans.
+			const item = menu.locator('.lse-url-menu-item').filter({
+				has: page.getByText(link.label, { exact: true }),
+			});
 			await item.click();
 
 			await expect(menu).toBeHidden();
-			await expect(input).toHaveValue(new RegExp(escapeRegex(link.path)));
+			// `quickNavigate` writes the path into `state.url` literally —
+			// assert against the exact string.
+			await expect(input).toHaveValue(link.path);
 		}
 	});
 });
-
-function escapeRegex(s: string): string {
-	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}

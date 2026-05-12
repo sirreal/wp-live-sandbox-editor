@@ -1,10 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { loginAsAdmin, runPageUrl } from '../helpers/wp-admin.js';
+import { runPageUrl } from '../helpers/wp-admin.js';
 import { statusText, urlInput, waitForSandboxReady } from '../helpers/sandbox.js';
 
 test.describe('Direct Run', () => {
 	test('boots the sandbox when navigating straight to the Run page', async ({ page }) => {
-		await loginAsAdmin(page);
 		await page.goto(runPageUrl());
 
 		await waitForSandboxReady(page);

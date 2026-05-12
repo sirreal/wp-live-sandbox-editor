@@ -53,9 +53,23 @@ export default defineConfig({
 			timeout: 10 * 60 * 1000,
 		},
 		{
-			name: 'chromium',
+			// Logs into wp-admin once and writes the cookie/localStorage
+			// state to `tests/.cache/admin-storage.json`. The chromium
+			// project below loads that file via `use.storageState` so each
+			// spec opens already-authenticated — no per-test wp-login.php
+			// round trip.
+			name: 'auth',
+			testDir: './tests/e2e',
+			testMatch: /auth\.setup\.ts/,
 			dependencies: ['wp-env'],
-			use: { ...devices['Desktop Chrome'] },
+		},
+		{
+			name: 'chromium',
+			dependencies: ['auth'],
+			use: {
+				...devices['Desktop Chrome'],
+				storageState: 'tests/.cache/admin-storage.json',
+			},
 		},
 	],
 });
