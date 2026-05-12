@@ -23,6 +23,8 @@
 
 namespace Live_Sandbox_Editor\Manifest;
 
+\defined( 'ABSPATH' ) || exit;
+
 /**
  * Default manifest: active plugins, active theme + parent, structural (core
  * WP) tables, no uploads.

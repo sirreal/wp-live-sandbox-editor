@@ -62,7 +62,7 @@ class Wpdb_Pdo_Statement {
 		// fresh failure even when get_results returns an empty array.
 		$this->wpdb->last_error = '';
 		try {
-			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- placeholders already substituted via PDO::quote()-equivalent escaping above; calling wpdb::prepare() here would corrupt the SQL.
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter -- placeholders already substituted via PDO::quote()-equivalent escaping in substitute_placeholders() above; calling wpdb::prepare() here would corrupt the SQL.
 			$result = $this->wpdb->get_results( $sql, ARRAY_A );
 
 			if ( '' !== (string) $this->wpdb->last_error ) {
@@ -193,9 +193,12 @@ class Wpdb_Pdo_Statement {
 	}
 
 	/**
+	 * @param int $mode PDO fetch mode — unused; adapter always returns
+	 *                  associative rows. Literal `2` mirrors `\PDO::FETCH_ASSOC`
+	 *                  so callers passing the PDO constant land on the default.
 	 * @return array<string,mixed>|false Next row, or false when exhausted.
 	 */
-	public function fetch( int $mode = \PDO::FETCH_ASSOC ) {
+	public function fetch( int $mode = 2 ) {
 		if ( $this->position >= count( $this->rows ) ) {
 			return false;
 		}
@@ -222,9 +225,10 @@ class Wpdb_Pdo_Statement {
 	 * @param mixed      $value     Value to bind.
 	 * @param int        $type      PDO param type — ignored: `quote()` infers
 	 *                              from the PHP type and the producer never
-	 *                              reads it back.
+	 *                              reads it back. Literal `2` mirrors
+	 *                              `\PDO::PARAM_STR`.
 	 */
-	public function bindValue( $parameter, $value, int $type = \PDO::PARAM_STR ): bool {
+	public function bindValue( $parameter, $value, int $type = 2 ): bool {
 		if ( null === $this->bound_params ) {
 			$this->bound_params = array();
 		}
@@ -237,6 +241,6 @@ class Wpdb_Pdo_Statement {
 	 * @throws \PDOException Always.
 	 */
 	public function __call( string $name, array $args ) {
-		throw new \PDOException( 'Wpdb_Pdo_Statement does not implement ' . $name . '()' );
+		throw new \PDOException( esc_html( 'Wpdb_Pdo_Statement does not implement ' . $name . '()' ) );
 	}
 }

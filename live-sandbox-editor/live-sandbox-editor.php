@@ -16,6 +16,8 @@
 
 namespace Live_Sandbox_Editor;
 
+\defined( 'ABSPATH' ) || exit;
+
 use FileTreeProducer;
 use WP_REST_Request;
 use WordPress\DataLiberation\MySQLDumpProducer;
@@ -475,7 +477,7 @@ function rest_sync_files( WP_REST_Request $request ): void {
 
 			++$emitted;
 			if ( 0 === ( $emitted % 64 ) ) {
-				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- set_time_limit may be disabled in php.ini; the silence is the intended fallback.
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,Squiz.PHP.DiscouragedFunctions.Discouraged -- intentional: streaming loop, default max_execution_time would terminate large exports; the silence covers set_time_limit being disabled in php.ini.
 				@set_time_limit( 0 );
 				if ( connection_aborted() ) {
 					exit;
@@ -611,7 +613,7 @@ function rest_sync_db( WP_REST_Request $request ): void {
 
 			++$emitted;
 			if ( 0 === ( $emitted % 64 ) ) {
-				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- set_time_limit may be disabled in php.ini; the silence is the intended fallback.
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,Squiz.PHP.DiscouragedFunctions.Discouraged -- intentional: streaming loop, default max_execution_time would terminate large exports; the silence covers set_time_limit being disabled in php.ini.
 				@set_time_limit( 0 );
 				if ( connection_aborted() ) {
 					exit;
