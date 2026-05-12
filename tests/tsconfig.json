@@ -1,0 +1,13 @@
+{
+	"$schema": "https://json.schemastore.org/tsconfig.json",
+	"extends": ["@tsconfig/strictest/tsconfig"],
+	"compilerOptions": {
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"lib": ["DOM", "DOM.Iterable", "ESNext"],
+		"noEmit": true,
+		"types": ["node"],
+		"paths": {}
+	},
+	"include": ["**/*.ts"]
+}
