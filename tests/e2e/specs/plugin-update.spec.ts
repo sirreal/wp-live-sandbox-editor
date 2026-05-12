@@ -31,7 +31,6 @@ test.describe('Plugin update in sandbox', () => {
 			/\/wp-admin\/update\.php\?action=upgrade-plugin&plugin=performance-lab%2Fload\.php&_wpnonce=[a-f0-9]+/;
 		await expect
 			.poll(() => page.frames().find((f) => upgradeUrlPattern.test(f.url()))?.url() ?? null, {
-				timeout: 5 * 1000,
 				message: 'Playground iframe should land on update.php?action=upgrade-plugin for this entry',
 			})
 			.toMatch(upgradeUrlPattern);
@@ -40,9 +39,7 @@ test.describe('Plugin update in sandbox', () => {
 		// by the "Go to Plugins page" link rendered after a successful
 		// update.php run.
 		const playgroundFrame = page.frameLocator('#lse-preview-iframe').frameLocator('iframe');
-		await expect(playgroundFrame.getByRole('link', { name: 'Go to Plugins page' })).toBeVisible({
-			timeout: 5 * 1000,
-		});
+		await expect(playgroundFrame.getByRole('link', { name: 'Go to Plugins page' })).toBeVisible();
 
 		const versionAfter = getInstalledPluginVersion(PERFORMANCE_LAB_ENTRY);
 		expect(versionAfter, 'host plugin version must not change').toBe(versionBefore);
