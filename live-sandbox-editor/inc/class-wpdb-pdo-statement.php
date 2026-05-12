@@ -62,7 +62,7 @@ class Wpdb_Pdo_Statement {
 		// fresh failure even when get_results returns an empty array.
 		$this->wpdb->last_error = '';
 		try {
-			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter -- placeholders already substituted via PDO::quote()-equivalent escaping in substitute_placeholders() above; calling wpdb::prepare() here would corrupt the SQL.
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter -- $sql is the output of substitute_placeholders(), which is safe for the MySQLDumpProducer SQL subset documented above (placeholder-only templates; no in-template literals or comments to misframe); calling wpdb::prepare() here would corrupt the SQL.
 			$result = $this->wpdb->get_results( $sql, ARRAY_A );
 
 			if ( '' !== (string) $this->wpdb->last_error ) {
