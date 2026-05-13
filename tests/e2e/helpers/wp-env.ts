@@ -226,17 +226,7 @@ function startFreshSession(testsCwd: string): WpEnvSession {
 	// Capture both so the regex below can scan whichever stream the
 	// URL ends up on, and re-echo to the user's terminal so cold-pull
 	// progress isn't hidden.
-	//
-	// `--auto-port` is intentionally NOT used. wp-env's install dir is
-	// keyed off the config-file path, so it gets reused across runs —
-	// but with `--auto-port`, the chosen host port can drift run to
-	// run while WP's `siteurl` / `home` in the reused DB stay pinned
-	// to the original port. The mismatch produces a 302 → dead-port
-	// → ERR_CONNECTION_REFUSED chain that defeats the whole "warm
-	// reuse" story. Each .wp-env.json now declares a `port`
-	// explicitly (8881 single-site, 8882 multisite); if a port is
-	// busy, wp-env will surface the error here.
-	const result = spawnSync('npx', ['--no-install', 'wp-env', 'start'], {
+	const result = spawnSync('npx', ['--no-install', 'wp-env', 'start', '--auto-port'], {
 		cwd: testsCwd,
 		encoding: 'utf8',
 		stdio: ['ignore', 'pipe', 'pipe'],

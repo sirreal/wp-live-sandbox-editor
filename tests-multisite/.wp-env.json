@@ -6,7 +6,6 @@
 		"SCRIPT_DEBUG": true,
 		"WP_DEBUG_LOG": "/var/www/html/wp-content/debug.log"
 	},
-	"port": 8882,
 	"multisite": true,
 	"plugins": ["../live-sandbox-editor"],
 	"mappings": {
