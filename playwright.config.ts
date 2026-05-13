@@ -1,10 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 import {
-	MULTISITE_TESTS_CWD,
-	TESTS_CWD,
 	ensureMultisiteRunning,
 	ensureWpEnvRunning,
+	MULTISITE_TESTS_CWD,
 	readCachedBaseUrl,
+	TESTS_CWD,
 } from './tests/e2e/helpers/wp-env.js';
 
 // Single source of truth for Playwright project names. Used both in

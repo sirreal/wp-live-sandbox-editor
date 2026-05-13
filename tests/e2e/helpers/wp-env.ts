@@ -220,16 +220,29 @@ function withLock<T>(paths: CachePaths, fn: () => T): T {
 	}
 }
 
-function startFreshSession(testsCwd: string): WpEnvSession {
+function startFreshSession(testsCwd: string, preferredPort?: number): WpEnvSession {
 	// wp-env writes progress (Docker pulls, container status, the
 	// summary "started at" line) to stderr; stdout stays mostly empty.
 	// Capture both so the regex below can scan whichever stream the
 	// URL ends up on, and re-echo to the user's terminal so cold-pull
 	// progress isn't hidden.
+	//
+	// `WP_ENV_PORT` seeds wp-env's preferred port; `--auto-port` still
+	// scans upward if it's busy. On GitHub Actions runners docker uses
+	// iptables-NAT without the userland-proxy, so node's TCP-bind probe
+	// (wp-env's freeness check) treats a docker-bound port as free —
+	// two sibling wp-envs both default-pick 8888 and the second
+	// container fails with "Bind for 0.0.0.0:8888 failed". Seeding
+	// distinct preferred ports per session avoids that race.
+	const env =
+		preferredPort !== undefined
+			? { ...process.env, WP_ENV_PORT: String(preferredPort) }
+			: process.env;
 	const result = spawnSync('npx', ['--no-install', 'wp-env', 'start', '--auto-port'], {
 		cwd: testsCwd,
 		encoding: 'utf8',
 		stdio: ['ignore', 'pipe', 'pipe'],
+		env,
 	});
 	const stdout = result.stdout ?? '';
 	const stderr = result.stderr ?? '';
@@ -264,7 +277,7 @@ function startFreshSession(testsCwd: string): WpEnvSession {
  * for the lock sees the winner's freshly written cache instead of
  * redundantly starting a second session.
  */
-function ensureRunning(testsCwd: string): WpEnvSession {
+function ensureRunning(testsCwd: string, preferredPort?: number): WpEnvSession {
 	const paths = pathsFor(testsCwd);
 	const warm = readCache(paths.cacheFile);
 	if (warm && pingPort(warm.port)) return warm;
@@ -272,7 +285,7 @@ function ensureRunning(testsCwd: string): WpEnvSession {
 	return withLock(paths, () => {
 		const recheck = readCache(paths.cacheFile);
 		if (recheck && pingPort(recheck.port)) return recheck;
-		const session = startFreshSession(testsCwd);
+		const session = startFreshSession(testsCwd, preferredPort);
 		writeCache(paths, session);
 		return session;
 	});
@@ -315,7 +328,10 @@ export function ensureWpEnvRunning(): WpEnvSession {
  */
 export function ensureMultisiteRunning(): WpEnvSession {
 	console.log('[wp-env] Ensuring multisite wp-env is running...');
-	const session = ensureRunning(MULTISITE_TESTS_CWD);
+	// Seed a high preferred port so multisite doesn't collide with the
+	// single-site env, which defaults to 8888. See startFreshSession for
+	// why a per-session preferred port matters on Linux/CI docker.
+	const session = ensureRunning(MULTISITE_TESTS_CWD, 8900);
 	console.log(`[wp-env] Multisite wp-env ready at ${session.baseUrl}`);
 	return session;
 }
