@@ -61,17 +61,20 @@ function parseRequestedProjects(argv: readonly string[]): ReadonlySet<string> {
 // skips booting entirely; the parent process is the single
 // authoritative wp-env owner, and children just read the cached
 // baseURL the parent wrote.
-const isPlaywrightChildProcess = /[\\/]playwright[\\/]lib[\\/]common[\\/]process\.js$/.test(
-	process.argv[1] ?? '',
-);
+const isPlaywrightChildProcess =
+	/[\\/]playwright[\\/]lib[\\/]common[\\/]process\.js$/.test(
+		process.argv[1] ?? '',
+	);
 
 const requestedProjects = parseRequestedProjects(process.argv);
 const projectFilterActive = requestedProjects.size > 0;
 const wantsSet = (set: ReadonlySet<string>): boolean =>
 	!projectFilterActive || [...requestedProjects].some((p) => set.has(p));
 
-const needSingleSite = !isPlaywrightChildProcess && wantsSet(SINGLE_SITE_PROJECT_NAMES);
-const needMultisite = !isPlaywrightChildProcess && wantsSet(MULTISITE_PROJECT_NAMES);
+const needSingleSite =
+	!isPlaywrightChildProcess && wantsSet(SINGLE_SITE_PROJECT_NAMES);
+const needMultisite =
+	!isPlaywrightChildProcess && wantsSet(MULTISITE_PROJECT_NAMES);
 
 // Both boot helpers are sync (they spawn wp-env or ping the cached
 // port via a child process), so the baseURLs below can use them
@@ -90,7 +93,9 @@ const needMultisite = !isPlaywrightChildProcess && wantsSet(MULTISITE_PROJECT_NA
 const session = needSingleSite ? ensureWpEnvRunning() : null;
 const multisiteSession = needMultisite ? ensureMultisiteRunning() : null;
 const BASE_URL =
-	process.env['WP_BASE_URL'] ?? session?.baseUrl ?? readCachedBaseUrl(TESTS_CWD);
+	process.env['WP_BASE_URL'] ??
+	session?.baseUrl ??
+	readCachedBaseUrl(TESTS_CWD);
 const MULTISITE_BASE_URL =
 	process.env['WP_BASE_URL_MULTISITE'] ??
 	multisiteSession?.baseUrl ??
