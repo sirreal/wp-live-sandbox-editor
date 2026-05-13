@@ -6,10 +6,11 @@
 		"SCRIPT_DEBUG": true,
 		"WP_DEBUG_LOG": "/var/www/html/wp-content/debug.log"
 	},
-	"port": 8881,
+	"port": 8882,
+	"multisite": true,
 	"plugins": ["../live-sandbox-editor"],
 	"mappings": {
-		"wp-content/mu-plugins/lse-tests-no-pointers.php": "./mu-plugins/disable-admin-pointers.php"
+		"wp-content/mu-plugins/lse-tests-no-pointers.php": "../tests/mu-plugins/disable-admin-pointers.php"
 	},
 	"testsEnvironment": false
 }

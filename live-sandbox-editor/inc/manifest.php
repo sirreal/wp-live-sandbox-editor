@@ -86,19 +86,22 @@ function default_active_themes(): array {
 /**
  * Core WordPress tables (prefixed). Plugin/custom tables are excluded.
  *
- * `is_super_admin()` gates the global tables in both cases: on single
- * site it is true for any user with `delete_users` (i.e. site admins),
- * and on multisite only for network Super Admins. Subsite admins on
- * multisite get blog tables only — `wp_users`, `wp_usermeta`,
- * `wp_sitemeta`, … are network-wide and excluded.
+ * Globals (`wp_users`, `wp_usermeta`, `wp_sitemeta`, …) are excluded
+ * from the default manifest. Syncing the host's `wp_users` into a
+ * Playground replaces its admin row, and the new `user_pass` hash
+ * invalidates the existing session cookie — every subsequent admin
+ * nav inside the sandbox 302s to wp-login.php. Users who genuinely
+ * need a global table can still opt in via the Setup UI;
+ * `filter_requested_tables()` accepts globals when
+ * `is_super_admin()` is true (single-site admins and multisite
+ * network Super Admins). Subsite admins on multisite are restricted
+ * to their own site's blog tables.
  *
  * @return array<string>
  */
 function default_structural_tables(): array {
 	global $wpdb;
-	$blog   = (array) $wpdb->tables( 'blog', true );
-	$global = is_super_admin() ? (array) $wpdb->tables( 'global', true ) : array();
-	return array_values( array_unique( array_merge( array_values( $blog ), array_values( $global ) ) ) );
+	return array_values( array_unique( (array) $wpdb->tables( 'blog', true ) ) );
 }
 
 /**

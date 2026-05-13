@@ -34,13 +34,12 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
-// Playwright runs npm scripts from the project root, so `tests/` is at a
-// stable location relative to cwd. Avoid `import.meta.url` — Playwright's
-// TS transform loads helpers as CJS, where it isn't defined.
+// Playwright runs npm scripts from the project root, so `tests/` and
+// `tests-multisite/` sit at stable locations relative to cwd. Avoid
+// `import.meta.url` — Playwright's TS transform loads helpers as CJS,
+// where it isn't defined.
 export const TESTS_CWD = join(process.cwd(), 'tests');
-const CACHE_DIR = join(TESTS_CWD, '.cache');
-const CACHE_FILE = join(CACHE_DIR, 'wp-env.json');
-const LOCK_FILE = `${CACHE_FILE}.lock`;
+export const MULTISITE_TESTS_CWD = join(process.cwd(), 'tests-multisite');
 
 // wp-env's first-run cold pull can run ~2 minutes; the lock holder is
 // inside that span for the entire duration. Budget generously so a
@@ -53,13 +52,25 @@ export interface WpEnvSession {
 	baseUrl: string;
 }
 
-function readCache(): WpEnvSession | null {
+interface CachePaths {
+	cacheDir: string;
+	cacheFile: string;
+	lockFile: string;
+}
+
+function pathsFor(testsCwd: string): CachePaths {
+	const cacheDir = join(testsCwd, '.cache');
+	const cacheFile = join(cacheDir, 'wp-env.json');
+	return { cacheDir, cacheFile, lockFile: `${cacheFile}.lock` };
+}
+
+function readCache(cacheFile: string): WpEnvSession | null {
 	// No `existsSync` pre-check: it would add a TOCTOU window where
 	// another process could delete the file between the check and the
 	// read. `readFileSync` already throws `ENOENT` on a missing file,
 	// which the catch below treats as a miss.
 	try {
-		const data = JSON.parse(readFileSync(CACHE_FILE, 'utf8')) as Partial<WpEnvSession>;
+		const data = JSON.parse(readFileSync(cacheFile, 'utf8')) as Partial<WpEnvSession>;
 		if (typeof data.port === 'number' && typeof data.baseUrl === 'string') {
 			return { port: data.port, baseUrl: data.baseUrl };
 		}
@@ -71,15 +82,15 @@ function readCache(): WpEnvSession | null {
 	return null;
 }
 
-function writeCache(session: WpEnvSession): void {
-	mkdirSync(CACHE_DIR, { recursive: true });
+function writeCache(paths: CachePaths, session: WpEnvSession): void {
+	mkdirSync(paths.cacheDir, { recursive: true });
 	// Atomic write: writeFileSync truncates first, so a reader hitting
 	// the gap would see an empty file and parse-fail. `renameSync` is
 	// atomic on POSIX, so any reader sees either the old contents or
 	// the new — never a half-written intermediate.
-	const tmp = `${CACHE_FILE}.${process.pid}.tmp`;
+	const tmp = `${paths.cacheFile}.${process.pid}.tmp`;
 	writeFileSync(tmp, `${JSON.stringify(session, null, '\t')}\n`, 'utf8');
-	renameSync(tmp, CACHE_FILE);
+	renameSync(tmp, paths.cacheFile);
 }
 
 /**
@@ -135,9 +146,9 @@ function isProcessAlive(pid: number): boolean {
 	}
 }
 
-function readLockHolderPid(): number | null {
+function readLockHolderPid(lockFile: string): number | null {
 	try {
-		const pid = Number(readFileSync(LOCK_FILE, 'utf8').trim());
+		const pid = Number(readFileSync(lockFile, 'utf8').trim());
 		return Number.isFinite(pid) && pid > 0 ? pid : null;
 	} catch {
 		// The lock file may have been released between our open attempt
@@ -146,15 +157,15 @@ function readLockHolderPid(): number | null {
 	}
 }
 
-function acquireLock(): void {
-	mkdirSync(CACHE_DIR, { recursive: true });
+function acquireLock(paths: CachePaths): void {
+	mkdirSync(paths.cacheDir, { recursive: true });
 	const deadline = Date.now() + LOCK_WAIT_TIMEOUT_MS;
 	while (true) {
 		try {
 			// `wx` = O_CREAT | O_EXCL. The kernel guarantees only one
 			// caller's open succeeds across processes — this is the
 			// actual atomic primitive the lock rides on.
-			const fd = openSync(LOCK_FILE, 'wx');
+			const fd = openSync(paths.lockFile, 'wx');
 			try {
 				writeSync(fd, String(process.pid));
 			} finally {
@@ -167,13 +178,13 @@ function acquireLock(): void {
 
 			// Lock is held. Check for a stale holder (process died
 			// without releasing) before we resign to waiting.
-			const holderPid = readLockHolderPid();
+			const holderPid = readLockHolderPid(paths.lockFile);
 			if (holderPid !== null && !isProcessAlive(holderPid)) {
 				// Stale: force-claim. The unlink may race with another
 				// contender's unlink, which is fine — at worst the
 				// next openSync attempt fails and we loop again.
 				try {
-					unlinkSync(LOCK_FILE);
+					unlinkSync(paths.lockFile);
 				} catch {
 					// Another contender beat us to the cleanup.
 				}
@@ -182,7 +193,7 @@ function acquireLock(): void {
 
 			if (Date.now() > deadline) {
 				throw new Error(
-					`Timed out after ${LOCK_WAIT_TIMEOUT_MS}ms waiting for wp-env cache lock at ${LOCK_FILE} ` +
+					`Timed out after ${LOCK_WAIT_TIMEOUT_MS}ms waiting for wp-env cache lock at ${paths.lockFile} ` +
 						`(held by PID ${holderPid ?? 'unknown'}). Delete the file manually if the holder is gone.`,
 				);
 			}
@@ -191,32 +202,42 @@ function acquireLock(): void {
 	}
 }
 
-function releaseLock(): void {
+function releaseLock(lockFile: string): void {
 	try {
-		unlinkSync(LOCK_FILE);
+		unlinkSync(lockFile);
 	} catch {
 		// Idempotent — already gone (someone reclaimed it as stale, or
 		// we never actually acquired). Either way, nothing to do.
 	}
 }
 
-function withLock<T>(fn: () => T): T {
-	acquireLock();
+function withLock<T>(paths: CachePaths, fn: () => T): T {
+	acquireLock(paths);
 	try {
 		return fn();
 	} finally {
-		releaseLock();
+		releaseLock(paths.lockFile);
 	}
 }
 
-function startFreshSession(): WpEnvSession {
+function startFreshSession(testsCwd: string): WpEnvSession {
 	// wp-env writes progress (Docker pulls, container status, the
 	// summary "started at" line) to stderr; stdout stays mostly empty.
 	// Capture both so the regex below can scan whichever stream the
 	// URL ends up on, and re-echo to the user's terminal so cold-pull
 	// progress isn't hidden.
-	const result = spawnSync('npx', ['--no-install', 'wp-env', 'start', '--auto-port'], {
-		cwd: TESTS_CWD,
+	//
+	// `--auto-port` is intentionally NOT used. wp-env's install dir is
+	// keyed off the config-file path, so it gets reused across runs —
+	// but with `--auto-port`, the chosen host port can drift run to
+	// run while WP's `siteurl` / `home` in the reused DB stay pinned
+	// to the original port. The mismatch produces a 302 → dead-port
+	// → ERR_CONNECTION_REFUSED chain that defeats the whole "warm
+	// reuse" story. Each .wp-env.json now declares a `port`
+	// explicitly (8881 single-site, 8882 multisite); if a port is
+	// busy, wp-env will surface the error here.
+	const result = spawnSync('npx', ['--no-install', 'wp-env', 'start'], {
+		cwd: testsCwd,
 		encoding: 'utf8',
 		stdio: ['ignore', 'pipe', 'pipe'],
 	});
@@ -225,14 +246,14 @@ function startFreshSession(): WpEnvSession {
 	process.stdout.write(stdout);
 	process.stderr.write(stderr);
 	if (result.status !== 0) {
-		throw new Error(`wp-env start --auto-port exited with status ${result.status}.`);
+		throw new Error(`wp-env start (cwd: ${testsCwd}) exited with status ${result.status}.`);
 	}
 	const combined = `${stdout}\n${stderr}`;
 	const match = combined.match(/development\s+site[^\n]*?http:\/\/[^\s:]+:(\d+)/i);
 	if (!match?.[1]) {
 		throw new Error(
-			'wp-env start did not include a "development site started at http://…:<port>" line. ' +
-				'Either the wp-env output format changed or the dev environment is disabled in tests/.wp-env.json.',
+			`wp-env start (cwd: ${testsCwd}) did not include a "development site started at http://…:<port>" line. ` +
+				'Either the wp-env output format changed or the dev environment is disabled in the .wp-env.json.',
 		);
 	}
 	const port = Number(match[1]);
@@ -240,27 +261,71 @@ function startFreshSession(): WpEnvSession {
 }
 
 /**
- * Return a live test wp-env session, starting one if necessary. Safe to
- * call from synchronous contexts (e.g. `playwright.config.ts` load).
+ * Internal: return a live wp-env session for the given config directory,
+ * starting one if necessary. Cache + lock files live under
+ * `${testsCwd}/.cache/`, so two separate configs (single-site, multisite)
+ * cache independently and can run concurrently on auto-discovered ports.
  *
  * Fast path (cache warm): a single ping outside the lock — no
  * serialisation overhead in the common case where the containers are
  * already up. Slow path (cache miss or stale): take the lock,
  * **re-check inside the critical section**, and only then spawn
- * `wp-env start`. The re-check is the load-bearing line: it ensures a
- * contender that lost the race for the lock will see the winner's
- * freshly written cache instead of redundantly starting a second
- * session.
+ * `wp-env start`. The re-check ensures a contender that lost the race
+ * for the lock sees the winner's freshly written cache instead of
+ * redundantly starting a second session.
  */
-export function ensureWpEnvRunning(): WpEnvSession {
-	const warm = readCache();
+function ensureRunning(testsCwd: string): WpEnvSession {
+	const paths = pathsFor(testsCwd);
+	const warm = readCache(paths.cacheFile);
 	if (warm && pingPort(warm.port)) return warm;
 
-	return withLock(() => {
-		const recheck = readCache();
+	return withLock(paths, () => {
+		const recheck = readCache(paths.cacheFile);
 		if (recheck && pingPort(recheck.port)) return recheck;
-		const session = startFreshSession();
-		writeCache(session);
+		const session = startFreshSession(testsCwd);
+		writeCache(paths, session);
 		return session;
 	});
+}
+
+/**
+ * Read the cached baseUrl for a given test config dir without
+ * pinging the port or starting wp-env. Returns undefined when no
+ * cache exists.
+ *
+ * Useful inside Playwright worker subprocesses: they re-load the
+ * config file but cannot re-parse the parent's `--project` filter
+ * (Playwright doesn't pass it through). They also don't need to boot
+ * anything — the parent already did — so reading the cache is
+ * sufficient to resolve baseURL for navigation.
+ */
+export function readCachedBaseUrl(testsCwd: string): string | undefined {
+	return readCache(pathsFor(testsCwd).cacheFile)?.baseUrl;
+}
+
+/**
+ * Return a live single-site wp-env session, starting one if necessary.
+ * Safe to call from synchronous contexts (e.g. `playwright.config.ts`
+ * load). Announces progress on the warm and cold paths so the user
+ * sees what is happening during the long-running config-load step.
+ */
+export function ensureWpEnvRunning(): WpEnvSession {
+	console.log('[wp-env] Ensuring single-site wp-env is running...');
+	const session = ensureRunning(TESTS_CWD);
+	console.log(`[wp-env] Single-site wp-env ready at ${session.baseUrl}`);
+	return session;
+}
+
+/**
+ * Return a live multisite wp-env session, starting one if necessary.
+ * Backed by `tests-multisite/.wp-env.json` (which declares
+ * `"multisite": true`) and an independent cache/lock under
+ * `tests-multisite/.cache/`, so it can run alongside the single-site
+ * session without contention.
+ */
+export function ensureMultisiteRunning(): WpEnvSession {
+	console.log('[wp-env] Ensuring multisite wp-env is running...');
+	const session = ensureRunning(MULTISITE_TESTS_CWD);
+	console.log(`[wp-env] Multisite wp-env ready at ${session.baseUrl}`);
+	return session;
 }

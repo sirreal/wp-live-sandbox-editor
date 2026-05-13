@@ -24,13 +24,17 @@ setup('test fixtures installed', async () => {
 	// on. `--force` lets the install overwrite a newer copy left over
 	// from a previous run so the suite is rerunnable without a fresh
 	// wp-env.
+	console.log(`[single-site-setup] Installing performance-lab ${PERFORMANCE_LAB_OLD_VERSION} (force, activate)...`);
 	wpCli(['plugin', 'install', 'performance-lab', `--version=${PERFORMANCE_LAB_OLD_VERSION}`, '--force', '--activate']);
+
+	console.log(`[single-site-setup] Installing twentyeleven ${TWENTY_ELEVEN_OLD_VERSION} (force)...`);
 	wpCli(['theme', 'install', 'twentyeleven', `--version=${TWENTY_ELEVEN_OLD_VERSION}`, '--force']);
 
 	// Wipe the cached update-check transients so the next API call
 	// doesn't short-circuit on a stale "no updates" result from a
 	// previous run. `ignoreErrors` covers the first-run case where the
 	// transient hasn't been written yet.
+	console.log('[single-site-setup] Invalidating update-check transients and forcing a refresh...');
 	wpCli(['transient', 'delete', 'update_plugins'], { ignoreErrors: true });
 	wpCli(['transient', 'delete', 'update_themes'], { ignoreErrors: true });
 
@@ -40,4 +44,6 @@ setup('test fixtures installed', async () => {
 	// happens before the cron-scheduled check runs and the rows are
 	// missing.
 	wpCli(['eval', 'wp_update_plugins(); wp_update_themes();']);
+
+	console.log('[single-site-setup] Fixtures ready.');
 });

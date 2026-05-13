@@ -2,21 +2,22 @@ import { execFileSync } from 'node:child_process';
 import { TESTS_CWD } from './wp-env.js';
 
 /**
- * Run a WP-CLI command inside the test wp-env container and return
+ * Run a WP-CLI command inside a test wp-env container and return
  * stdout. Throws if the command exits non-zero unless `ignoreErrors` is
  * set.
  *
- * `cwd: TESTS_CWD` is what binds this to the tests/.wp-env.json session
- * instead of the project root's developer-facing config — wp-env picks
- * its environment based on the location of the .wp-env.json it finds.
- * `npx --no-install` keeps the lookup inside the project's
- * node_modules so we don't accidentally hit a global wp-env install
- * with a different version.
+ * `cwd` selects which `.wp-env.json` session the command targets —
+ * defaults to the single-site `tests/` session; pass
+ * `MULTISITE_TESTS_CWD` to drive the multisite session instead.
+ * wp-env picks its environment based on the location of the
+ * .wp-env.json it finds. `npx --no-install` keeps the lookup inside
+ * the project's node_modules so we don't accidentally hit a global
+ * wp-env install with a different version.
  */
-export function wpCli(args: string[], opts: { ignoreErrors?: boolean } = {}): string {
+export function wpCli(args: string[], opts: { ignoreErrors?: boolean; cwd?: string } = {}): string {
 	try {
 		return execFileSync('npx', ['--no-install', 'wp-env', 'run', 'cli', '--', 'wp', ...args], {
-			cwd: TESTS_CWD,
+			cwd: opts.cwd ?? TESTS_CWD,
 			encoding: 'utf8',
 			stdio: ['ignore', 'pipe', 'pipe'],
 		}).trim();
