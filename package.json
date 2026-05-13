@@ -5,12 +5,25 @@
 	"description": "",
 	"private": true,
 	"scripts": {
+		"postinstall": "playwright install chromium",
 		"dev": "vite",
 		"build": "vite build",
 		"watch": "vite build --watch",
 		"zip": "npm run build && zip -r live-sandbox-editor.zip live-sandbox-editor",
+		"wp-env": "wp-env",
+		"wp-env:start": "wp-env start",
+		"wp-env:stop": "wp-env stop",
+		"test:wp-env:stop": "cd tests && wp-env stop && rm -rf .cache",
+		"test:wp-env:destroy": "cd tests && wp-env destroy && rm -rf .cache",
+		"typecheck": "tsgo --noEmit",
+		"lint:js": "biome check .",
+		"lint:php": "find live-sandbox-editor src -path 'live-sandbox-editor/vendor' -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l",
+		"lint:phpcs": "composer lint:src",
+		"validate:composer": "composer validate --strict && composer validate --strict --working-dir=live-sandbox-editor",
 		"check:plugin": "out=$(wp-env run cli wp plugin check live-sandbox-editor --require=./wp-content/plugins/plugin-check/cli.php 2>/dev/null); printf '%s\n' \"$out\"; ! printf '%s\n' \"$out\" | grep -qE '\tERROR\t'",
-		"ci-check": "tsgo --noEmit && biome check . && npm run build && composer validate --strict && composer validate --strict --working-dir=live-sandbox-editor && find live-sandbox-editor src -path 'live-sandbox-editor/vendor' -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l && composer lint:src && npm run check:plugin"
+		"test:pw": "npm run build && playwright test",
+		"test:pw:ui": "npm run build && playwright test --ui",
+		"ci-check": "npm run typecheck && npm run lint:js && npm run build && npm run validate:composer && npm run lint:php && npm run lint:phpcs && npm run check:plugin && npm run test:pw"
 	},
 	"author": "sirreal",
 	"license": "GPL-2.0",
@@ -20,7 +33,9 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.14",
+		"@playwright/test": "^1.59.1",
 		"@tsconfig/strictest": "^2.0.5",
+		"@wordpress/env": "^11.5.0",
 		"@wordpress/interactivity": "^6.45.0",
 		"typescript": "npm:@typescript/native-preview@beta",
 		"vite": "^8.x"

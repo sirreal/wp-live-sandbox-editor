@@ -8,3 +8,12 @@
 
 # Used by agents during Playwright-driven debug sessions.
 .playwright-mcp
+
+# Playwright test artifacts.
+/playwright-report/
+/test-results/
+/blob-report/
+/playwright/.cache/
+
+# Cached state for the test-dedicated wp-env session.
+/tests/.cache/
