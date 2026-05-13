@@ -99,13 +99,20 @@ function writeCache(paths: CachePaths, session: WpEnvSession): void {
  * from `playwright.config.ts` (which runs synchronously at module load).
  * `curl` would be simpler but is not guaranteed on every CI image —
  * Node is.
+ *
+ * Accepts any 2xx/3xx as "alive": single-site `/wp-login.php` answers
+ * 200, but multisite often answers 302 (scheme/host normalization)
+ * even when the server is fully up. Anything < 400 means the WP stack
+ * is serving — that's what we care about. A dead/down container
+ * surfaces as `req.on('error')` (ECONNREFUSED) or a timeout, both
+ * already routed to `process.exit(1)` below.
  */
 function pingPort(port: number): boolean {
 	const probe = `
 const http = require('http');
 const req = http.get(
 	{ host: '127.0.0.1', port: ${port}, path: '/wp-login.php', timeout: 3000 },
-	(res) => { res.resume(); process.exit(res.statusCode === 200 ? 0 : 1); },
+	(res) => { res.resume(); process.exit(res.statusCode < 400 ? 0 : 1); },
 );
 req.on('error', () => process.exit(1));
 req.on('timeout', () => { req.destroy(); process.exit(1); });
@@ -328,10 +335,16 @@ export function ensureWpEnvRunning(): WpEnvSession {
  */
 export function ensureMultisiteRunning(): WpEnvSession {
 	console.log('[wp-env] Ensuring multisite wp-env is running...');
-	// Seed a high preferred port so multisite doesn't collide with the
-	// single-site env, which defaults to 8888. See startFreshSession for
-	// why a per-session preferred port matters on Linux/CI docker.
-	const session = ensureRunning(MULTISITE_TESTS_CWD, 8900);
+	// On CI runners (Linux + docker iptables-NAT), wp-env's `--auto-port`
+	// node-bind probe doesn't see a docker-bound port as taken, so both
+	// sibling wp-envs default-pick 8888 and the second `docker compose
+	// up` fails with "Bind for 0.0.0.0:8888 failed". Seed a distinct
+	// preferred port to break the tie. Locally (Docker Desktop/OrbStack
+	// userland-proxy on macOS) `--auto-port` works correctly without a
+	// seed, so we skip it — seeding there would only shuffle the port
+	// between runs and invalidate WordPress's stored siteurl.
+	const preferredPort = process.env['CI'] === 'true' ? 8900 : undefined;
+	const session = ensureRunning(MULTISITE_TESTS_CWD, preferredPort);
 	console.log(`[wp-env] Multisite wp-env ready at ${session.baseUrl}`);
 	return session;
 }

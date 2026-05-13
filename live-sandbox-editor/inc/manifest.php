@@ -86,9 +86,10 @@ function default_active_themes(): array {
 /**
  * Default structural tables for the sandbox: this site's blog tables
  * only (`$wpdb->tables( 'blog', true )`). Globals (`wp_users`,
- * `wp_usermeta`, `wp_sitemeta`, …) are opt-in via the Setup UI;
- * `filter_requested_tables()` admits them for any user where
- * `is_super_admin()` is true.
+ * `wp_usermeta`, `wp_sitemeta`, …) are never included in the defaults
+ * and never shown as Setup options. A super admin who needs them can
+ * still submit a hand-crafted manifest URL/JSON; `filter_requested_tables()`
+ * is the gate on that path.
  *
  * @return array<string>
  */
@@ -158,6 +159,12 @@ function normalize( $raw ): array {
  * multisite — other subsites' tables, which all share
  * `$wpdb->base_prefix`, are excluded. When true the filter accepts any
  * safely-named table starting with the current site or base prefix.
+ *
+ * Single-site quirk: `is_super_admin()` returns true for any user with
+ * `delete_users` (i.e. site admins), so this is a no-op for the
+ * typical admin there. The boundary it actually enforces is on
+ * multisite, where subsite administrators are not Super Admins and
+ * must be kept off cross-site / global tables.
  *
  * @param array<mixed> $raw_tables Raw `tables` entries from a manifest.
  * @param bool         $is_super   True for users with global-table
