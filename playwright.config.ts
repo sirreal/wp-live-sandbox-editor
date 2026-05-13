@@ -7,13 +7,26 @@ import {
 	readCachedBaseUrl,
 } from './tests/e2e/helpers/wp-env.js';
 
-// Project name partitions, used to decide which wp-env(s) to boot at
-// config-load time. Keep in sync with the `projects` list below.
-const SINGLE_SITE_PROJECT_NAMES = new Set(['wp-env', 'auth', 'chromium']);
-const MULTISITE_PROJECT_NAMES = new Set([
-	'multisite-setup',
-	'auth-multisite',
-	'chromium-multisite',
+// Single source of truth for Playwright project names. Used both in
+// the `projects:` block below and in the `--project` argv detection
+// that decides which wp-env(s) to boot at config-load time.
+const PROJECT = {
+	wpEnv: 'wp-env',
+	auth: 'auth',
+	chromium: 'chromium',
+	multisiteSetup: 'multisite-setup',
+	authMultisite: 'auth-multisite',
+	chromiumMultisite: 'chromium-multisite',
+} as const;
+const SINGLE_SITE_PROJECT_NAMES: ReadonlySet<string> = new Set([
+	PROJECT.wpEnv,
+	PROJECT.auth,
+	PROJECT.chromium,
+]);
+const MULTISITE_PROJECT_NAMES: ReadonlySet<string> = new Set([
+	PROJECT.multisiteSetup,
+	PROJECT.authMultisite,
+	PROJECT.chromiumMultisite,
 ]);
 
 /**
@@ -124,12 +137,11 @@ export default defineConfig({
 	},
 	projects: [
 		{
-			// The "wp-env" project only primes test fixtures now. Actually
-			// booting wp-env happens at config-load time via
-			// `ensureWpEnvRunning()` so the URL is available before any
-			// project runs. Regex is anchored so a future
-			// "*-wp-env.setup.ts" sibling can't get vacuumed in here.
-			name: 'wp-env',
+			// Primes test fixtures (outdated plugin/theme versions).
+			// wp-env itself is booted at config-load time via
+			// `ensureWpEnvRunning()`. Regex is anchored so a future
+			// `*-wp-env.setup.ts` sibling can't get vacuumed in here.
+			name: PROJECT.wpEnv,
 			testDir: './tests/e2e',
 			testMatch: /[\\/]wp-env\.setup\.ts$/,
 			timeout: 10 * 60 * 1000,
@@ -140,14 +152,14 @@ export default defineConfig({
 			// project below loads that file via `use.storageState` so each
 			// spec opens already-authenticated — no per-test wp-login.php
 			// round trip.
-			name: 'auth',
+			name: PROJECT.auth,
 			testDir: './tests/e2e',
 			testMatch: /[\\/]auth\.setup\.ts$/,
-			dependencies: ['wp-env'],
+			dependencies: [PROJECT.wpEnv],
 		},
 		{
-			name: 'chromium',
-			dependencies: ['auth'],
+			name: PROJECT.chromium,
+			dependencies: [PROJECT.auth],
 			// Multisite specs live under tests/e2e/specs/multisite/ and
 			// run on the second wp-env via the chromium-multisite
 			// project. Exclude them here so the single-site chain
@@ -167,7 +179,7 @@ export default defineConfig({
 			// `auth-multisite.setup.ts` and pulls those tests into
 			// this project, which has no baseURL and would crash with
 			// "Cannot navigate to invalid URL".
-			name: 'multisite-setup',
+			name: PROJECT.multisiteSetup,
 			testDir: './tests/e2e',
 			testMatch: /[\\/]multisite\.setup\.ts$/,
 			timeout: 10 * 60 * 1000,
@@ -176,17 +188,17 @@ export default defineConfig({
 			// Logs in as `admin` (Super Admin) and `siteadmin`
 			// (subsite admin) on the multisite wp-env and writes two
 			// storage state files. Specs opt in per-test.use.
-			name: 'auth-multisite',
+			name: PROJECT.authMultisite,
 			testDir: './tests/e2e',
 			testMatch: /[\\/]auth-multisite\.setup\.ts$/,
-			dependencies: ['multisite-setup'],
+			dependencies: [PROJECT.multisiteSetup],
 			use: { baseURL: MULTISITE_BASE_URL },
 		},
 		{
 			// Multisite smoke specs. No project-level storageState —
 			// each spec declares its identity via test.use() at file top.
-			name: 'chromium-multisite',
-			dependencies: ['auth-multisite'],
+			name: PROJECT.chromiumMultisite,
+			dependencies: [PROJECT.authMultisite],
 			testMatch: /[\\/]multisite[\\/].*\.spec\.ts$/,
 			use: {
 				...devices['Desktop Chrome'],
