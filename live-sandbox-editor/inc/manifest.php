@@ -86,12 +86,18 @@ function default_active_themes(): array {
 /**
  * Core WordPress tables (prefixed). Plugin/custom tables are excluded.
  *
+ * `is_super_admin()` gates the global tables in both cases: on single
+ * site it is true for any user with `delete_users` (i.e. site admins),
+ * and on multisite only for network Super Admins. Subsite admins on
+ * multisite get blog tables only — `wp_users`, `wp_usermeta`,
+ * `wp_sitemeta`, … are network-wide and excluded.
+ *
  * @return array<string>
  */
 function default_structural_tables(): array {
 	global $wpdb;
 	$blog   = (array) $wpdb->tables( 'blog', true );
-	$global = is_multisite() ? (array) $wpdb->tables( 'global', true ) : array();
+	$global = is_super_admin() ? (array) $wpdb->tables( 'global', true ) : array();
 	return array_values( array_unique( array_merge( array_values( $blog ), array_values( $global ) ) ) );
 }
 
@@ -133,23 +139,7 @@ function normalize( $raw ): array {
 
 	$tables = array();
 	if ( isset( $raw['tables'] ) && is_array( $raw['tables'] ) ) {
-		global $wpdb;
-		$prefix = (string) $wpdb->prefix;
-		$base_p = (string) $wpdb->base_prefix;
-		foreach ( $raw['tables'] as $name ) {
-			if ( ! is_string( $name ) || '' === $name ) {
-				continue;
-			}
-			// Defence in depth: only allow safe table-name characters and
-			// require the configured prefix so we never dump arbitrary tables.
-			if ( ! preg_match( '/^[A-Za-z0-9_]+$/', $name ) ) {
-				continue;
-			}
-			if ( ! str_starts_with( $name, $prefix ) && ! str_starts_with( $name, $base_p ) ) {
-				continue;
-			}
-			$tables[] = $name;
-		}
+		$tables = filter_requested_tables( $raw['tables'], is_super_admin() );
 	}
 
 	$uploads = ! empty( $raw['uploads'] );
@@ -160,6 +150,64 @@ function normalize( $raw ): array {
 		'tables'  => array_values( array_unique( $tables ) ),
 		'uploads' => $uploads,
 	);
+}
+
+/**
+ * Filter user-requested table names down to those this request is
+ * allowed to export.
+ *
+ * When `$is_super` is false the result is a strict allowlist of the
+ * current site's blog tables (`$wpdb->tables( 'blog', true )`), so
+ * globals (`wp_users`, `wp_usermeta`, `wp_sitemeta`, …) and — on
+ * multisite — other subsites' tables, which all share
+ * `$wpdb->base_prefix`, are excluded. When true the filter accepts any
+ * safely-named table starting with the current site or base prefix.
+ *
+ * @param array<mixed> $raw_tables Raw `tables` entries from a manifest.
+ * @param bool         $is_super   True for users with global-table
+ *                                 access: single-site admins or
+ *                                 multisite Super Admins (see
+ *                                 `is_super_admin()`).
+ * @return array<string>
+ */
+function filter_requested_tables( array $raw_tables, bool $is_super ): array {
+	global $wpdb;
+
+	if ( ! $is_super ) {
+		$allowed = array_flip( (array) $wpdb->tables( 'blog', true ) );
+		$out     = array();
+		foreach ( $raw_tables as $name ) {
+			if ( ! is_string( $name ) || '' === $name ) {
+				continue;
+			}
+			if ( ! preg_match( '/^[A-Za-z0-9_]+$/', $name ) ) {
+				continue;
+			}
+			if ( isset( $allowed[ $name ] ) ) {
+				$out[] = $name;
+			}
+		}
+		return $out;
+	}
+
+	$prefix = (string) $wpdb->prefix;
+	$base_p = (string) $wpdb->base_prefix;
+	$out    = array();
+	foreach ( $raw_tables as $name ) {
+		if ( ! is_string( $name ) || '' === $name ) {
+			continue;
+		}
+		// Defence in depth: only allow safe table-name characters and
+		// require the configured prefix so we never dump arbitrary tables.
+		if ( ! preg_match( '/^[A-Za-z0-9_]+$/', $name ) ) {
+			continue;
+		}
+		if ( ! str_starts_with( $name, $prefix ) && ! str_starts_with( $name, $base_p ) ) {
+			continue;
+		}
+		$out[] = $name;
+	}
+	return $out;
 }
 
 /**
