@@ -15,5 +15,6 @@
 /blob-report/
 /playwright/.cache/
 
-# Cached state for the test-dedicated wp-env session.
+# Cached state for the test-dedicated wp-env sessions.
 /tests/.cache/
+/tests-multisite/.cache/

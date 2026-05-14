@@ -11,6 +11,8 @@ import { test as setup } from '@playwright/test';
 import { loginAsAdmin, ADMIN_STORAGE_STATE } from './helpers/wp-admin.js';
 
 setup('authenticate as admin', async ({ page }) => {
+	console.log('[auth] Logging in as admin (single-site)...');
 	await loginAsAdmin(page);
 	await page.context().storageState({ path: ADMIN_STORAGE_STATE });
+	console.log(`[auth] Saved storage state to ${ADMIN_STORAGE_STATE}`);
 });

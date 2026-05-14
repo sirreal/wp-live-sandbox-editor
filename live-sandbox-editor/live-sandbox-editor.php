@@ -364,6 +364,16 @@ function rest_sync_manifest( WP_REST_Request $request ): array {
 	$uploads_url = is_array( $uploads ) && ! empty( $uploads['baseurl'] ) ? (string) $uploads['baseurl'] : '';
 	$manifest    = Manifest\defaults();
 
+	// Mirror the `/sync-db` submit gate on the Setup-options pipeline:
+	// the Setup UI renders `manifest.tables` directly as the picker's
+	// checkbox list, so any table that lands here is a table the user
+	// can ask to export. Apply `filter_requested_tables` with the
+	// caller's super-admin status — today `default_structural_tables()`
+	// is blog-only and the filter is a no-op, but locking the gate here
+	// means a future change to defaults can't widen the picker on
+	// multisite for non-super-admins.
+	$manifest['tables'] = Manifest\filter_requested_tables( $manifest['tables'], is_super_admin() );
+
 	$response = array(
 		'manifest'   => $manifest,
 		'siteUrl'    => (string) get_site_url(),
