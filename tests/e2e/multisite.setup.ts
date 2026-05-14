@@ -122,6 +122,19 @@ setup('multisite fixtures installed', async () => {
 		console.log(`[multisite-setup] User '${SITE_ADMIN_USER}' already exists (ID=${existingUserId})`);
 	}
 
+	// Force-set the administrator role on the subsite. Symmetric with the
+	// super-admin removal below: warm/partial state from an aborted prior
+	// run could leave the user without `wp_2_capabilities` (not a member
+	// of /site2/), or with a weaker role like `subscriber` — both would
+	// break the boundary the specs exercise. `add_user_to_blog()` is
+	// idempotent: it inserts the membership when missing and overwrites
+	// the role when present.
+	console.log(`[multisite-setup] Ensuring '${SITE_ADMIN_USER}' has administrator role on '/${SITE_SLUG}/'...`);
+	cli([
+		'eval',
+		`add_user_to_blog( ${subsite.blog_id}, get_user_by( 'login', '${SITE_ADMIN_USER}' )->ID, 'administrator' );`,
+	]);
+
 	// Defensive: a fresh `wp user create` doesn't auto-promote, but a
 	// prior run could have left this user as Super Admin. Strip the
 	// role so the boundary the specs exercise is the real one.
