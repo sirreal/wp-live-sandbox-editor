@@ -5,6 +5,7 @@
 /plugin-repo/
 /wordpress
 *.tsbuildinfo
+/live-sandbox-editor.zip
 
 # Used by agents during Playwright-driven debug sessions.
 .playwright-mcp
