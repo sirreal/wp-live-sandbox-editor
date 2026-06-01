@@ -37,7 +37,7 @@
 		"ci-check": "npm run typecheck && npm run lint:js && npm run build && npm run validate:composer && npm run lint:php && npm run lint:phpcs && npm run check:plugin && npm run test:pw"
 	},
 	"author": "sirreal",
-	"license": "GPL-2.0",
+	"license": "GPL-2.0-or-later",
 	"dependencies": {
 		"@wp-playground/client": "^3.1.30",
 		"monaco-editor": "^0.55.1"
