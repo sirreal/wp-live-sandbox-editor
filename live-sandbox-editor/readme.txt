@@ -11,7 +11,7 @@ Add live development sandbox to WP Admin.
 
 == Contributing ==
 
-TBD
+Development can be found at https://github.com/sirreal/wp-live-sandbox-editor.
 
 == Changelog ==
 
