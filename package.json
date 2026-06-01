@@ -8,7 +8,7 @@
 		"postinstall": "playwright install chromium",
 		"dev": "vite",
 		"build": "vite build",
-		"watch": "vite build --watch",
+		"watch": "vite build --watch --mode development",
 		"zip": "npm run build && zip -r live-sandbox-editor.zip live-sandbox-editor",
 		"wp-env": "wp-env",
 		"wp-env:start": "wp-env start",

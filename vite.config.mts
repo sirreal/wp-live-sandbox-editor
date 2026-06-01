@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 
-export default defineConfig({
+export default defineConfig(({ mode: buildMode }) => ({
 	base: './',
 	server: {
 		watch: {
@@ -14,7 +14,7 @@ export default defineConfig({
 		outDir: 'live-sandbox-editor/build',
 		emptyOutDir: true,
 		modulePreload: false,
-		sourcemap: true,
+		sourcemap: buildMode !== 'production',
 		rolldownOptions: {
 			input: {
 				main: 'src/main.ts',
@@ -66,4 +66,4 @@ export default defineConfig({
 			},
 		},
 	},
-});
+}));
