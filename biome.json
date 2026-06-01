@@ -24,6 +24,7 @@
 			"!**/worktrees",
 			"!live-sandbox-editor/build",
 			"!live-sandbox-editor/vendor",
+			"!live-sandbox-editor/vendor-prefixed",
 			"!node_modules",
 			"!wordpress"
 		]

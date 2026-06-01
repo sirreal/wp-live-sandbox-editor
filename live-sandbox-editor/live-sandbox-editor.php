@@ -5,7 +5,8 @@
  * Description:       Open a live sandbox editor of your site for testing or development.
  * Version:           0.1
  * Requires at least: 6.8
- * Tested up to:      6.9
+ * Requires PHP:      7.4
+ * Tested up to:      7.0
  * Author:            Jon Surrell
  * Author URI:        https://profiles.wordpress.org/jonsurrell/
  * License:           GPLv2 or later
@@ -18,9 +19,10 @@ namespace Live_Sandbox_Editor;
 
 \defined( 'ABSPATH' ) || exit;
 
-use FileTreeProducer;
+use Live_Sandbox_Editor_Vendor_FileTreeProducer as FileTreeProducer;
 use WP_REST_Request;
-use WordPress\DataLiberation\MySQLDumpProducer;
+use Live_Sandbox_Editor\Vendor\WordPress\DataLiberation\MySQLDumpProducer;
+use function Live_Sandbox_Editor\Vendor\WordPress\Reprint\Exporter\build_pdo_dsn;
 
 const SLUG        = 'live-sandbox-editor';
 const SETUP_SLUG  = 'live-sandbox-editor-setup';
@@ -32,24 +34,17 @@ require_once __DIR__ . '/inc/manifest.php';
 require_once __DIR__ . '/inc/class-wpdb-pdo-adapter.php';
 require_once __DIR__ . '/inc/test-upgrade.php';
 
-/**
- * Load vendored Reprint classes only if they are not already defined.
- *
- * When the Reprint plugin is active it registers its own autoloader for
- * these classes. Loading our vendor/autoload.php on top would attempt to
- * redefine them and cause a fatal "Cannot redeclare class" error. We check
- * for FileTreeProducer (global-namespace) as a sentinel; if it is already
- * available the rest of the vendored classes will be too.
+/*
+ * Load the prefixed vendored dependencies. Strauss namespaces every bundled
+ * library under Live_Sandbox_Editor\Vendor\, so there is nothing to collide
+ * with. The file is absent only in a development checkout where
+ * `composer install` has not been run.
  */
-function maybe_load_reprint(): void {
-	if ( class_exists( 'FileTreeProducer' ) ) {
-		return;
-	}
-	$autoload = __DIR__ . '/vendor/autoload.php';
-	if ( file_exists( $autoload ) ) {
-		require_once $autoload;
-	}
+$lse_vendor_autoload = __DIR__ . '/vendor-prefixed/autoload.php';
+if ( file_exists( $lse_vendor_autoload ) ) {
+	require_once $lse_vendor_autoload;
 }
+unset( $lse_vendor_autoload );
 
 /** Set up the plugin. */
 function init(): void {
@@ -305,8 +300,7 @@ function reprint_notice(): void {
 	if ( ! $screen || null === page_for_screen( $screen->id ) ) {
 		return;
 	}
-	maybe_load_reprint();
-	if ( class_exists( 'FileTreeProducer' ) ) {
+	if ( class_exists( 'Live_Sandbox_Editor_Vendor_FileTreeProducer' ) ) {
 		return;
 	}
 	echo '<div class="notice notice-error"><p>';
@@ -416,10 +410,9 @@ function rest_sync_manifest( WP_REST_Request $request ): array {
  * @param  WP_REST_Request $request Request.
  */
 function rest_sync_files( WP_REST_Request $request ): void {
-	maybe_load_reprint();
 	Sync_Stream\setup();
 
-	if ( ! class_exists( 'FileTreeProducer' ) ) {
+	if ( ! class_exists( 'Live_Sandbox_Editor_Vendor_FileTreeProducer' ) ) {
 		http_response_code( 500 );
 		Sync_Stream\emit_marker( Sync_Stream\MARKER_ERR, 'Reprint classes not available.' );
 		Sync_Stream\emit_marker( Sync_Stream\MARKER_DONE );
@@ -556,10 +549,9 @@ function build_file_entries( array $manifest ): array {
  * @param  WP_REST_Request $request Request.
  */
 function rest_sync_db( WP_REST_Request $request ): void {
-	maybe_load_reprint();
 	Sync_Stream\setup();
 
-	if ( ! class_exists( 'WordPress\\DataLiberation\\MySQLDumpProducer' ) ) {
+	if ( ! class_exists( 'Live_Sandbox_Editor\\Vendor\\WordPress\\DataLiberation\\MySQLDumpProducer' ) ) {
 		http_response_code( 503 );
 		Sync_Stream\emit_marker( Sync_Stream\MARKER_ERR, 'Reprint classes not available.' );
 		Sync_Stream\emit_marker( Sync_Stream\MARKER_DONE );
@@ -574,9 +566,11 @@ function rest_sync_db( WP_REST_Request $request ): void {
 
 	try {
 		if ( extension_loaded( 'pdo_mysql' ) ) {
-			// build_pdo_dsn() is provided by reprint-exporter's Composer `files`
-			// autoload; static analysers can't see it.
-			if ( function_exists( 'build_pdo_dsn' ) ) {
+			// build_pdo_dsn() is a namespaced helper from reprint-exporter's
+			// Composer `files` autoload, prefixed by Strauss and imported via
+			// `use function` above; static analysers can't see it. Absent
+			// only in a dev checkout without `composer install`.
+			if ( function_exists( 'Live_Sandbox_Editor\\Vendor\\WordPress\\Reprint\\Exporter\\build_pdo_dsn' ) ) {
 				$dsn = build_pdo_dsn( DB_HOST, DB_NAME );
 			} else {
 				$dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4';

@@ -3,6 +3,30 @@
 	"description": "Live Sandbox Editor — a WordPress plugin that provides an in-browser sandbox editor backed by Playground.",
 	"license": "GPL-2.0-or-later",
 	"require": {
+		"php": ">=7.4",
 		"wp-php-toolkit/reprint-exporter": "^0.1.45"
+	},
+	"require-dev": {
+		"brianhenryie/strauss": "^0.27"
+	},
+	"config": {
+		"platform": {
+			"php": "8.3"
+		}
+	},
+	"scripts": {
+		"strauss": ["@php vendor/bin/strauss"],
+		"post-install-cmd": ["@strauss"],
+		"post-update-cmd": ["@strauss"]
+	},
+	"extra": {
+		"strauss": {
+			"target_directory": "vendor-prefixed",
+			"namespace_prefix": "Live_Sandbox_Editor\\Vendor\\",
+			"classmap_prefix": "Live_Sandbox_Editor_Vendor_",
+			"constant_prefix": "LIVE_SANDBOX_EDITOR_VENDOR_",
+			"functions_prefix": "live_sandbox_editor_vendor_",
+			"delete_vendor_packages": true
+		}
 	}
 }

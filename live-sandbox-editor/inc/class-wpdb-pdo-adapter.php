@@ -11,6 +11,8 @@
 
 namespace Live_Sandbox_Editor;
 
+\defined( 'ABSPATH' ) || exit;
+
 require_once __DIR__ . '/class-wpdb-pdo-statement.php';
 
 class Wpdb_Pdo_Adapter {

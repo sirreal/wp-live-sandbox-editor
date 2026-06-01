@@ -8,6 +8,8 @@
 
 namespace Live_Sandbox_Editor;
 
+\defined( 'ABSPATH' ) || exit;
+
 class Wpdb_Pdo_Statement {
 
 	/** @var \wpdb */

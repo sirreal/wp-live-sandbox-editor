@@ -1,0 +1,8 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/wp-env.json",
+	"plugins": [
+		"../../dist/live-sandbox-editor",
+		"https://downloads.wordpress.org/plugin/plugin-check.2.0.0.zip"
+	],
+	"testsEnvironment": false
+}
