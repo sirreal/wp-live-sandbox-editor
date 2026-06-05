@@ -175,8 +175,10 @@ function app_data( array $data ): array {
 		// Major.minor only — Playground's blueprint `preferredVersions`
 		// accepts that shape plus 'latest'/'beta'/'nightly', not full
 		// patches. Sandbox boots on the host's WP+PHP series so admin
-		// chrome, list-table HTML, and available APIs match.
-		'wpVersion'      => normalize_version( $GLOBALS['wp_version'] ?? '' ),
+		// chrome, list-table HTML, and available APIs match. A host on
+		// trunk maps to 'nightly' (see playground_wp_version) rather than
+		// an unreleased major.minor Playground can't serve.
+		'wpVersion'      => playground_wp_version( $GLOBALS['wp_version'] ?? '' ),
 		'phpVersion'     => playground_php_version( PHP_VERSION ),
 		// JS consumers (pre-sync cleanup) need to know LSE's own
 		// directory name so they don't prune it. SLUG is the canonical
@@ -239,6 +241,28 @@ function playground_php_version( string $raw ): string {
 	$mm      = normalize_version( $raw );
 	$allowed = array( '7.0', '7.1', '7.2', '7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4' );
 	return in_array( $mm, $allowed, true ) ? $mm : '';
+}
+
+/**
+ * Like `normalize_version()` but constrained to WP versions Playground can
+ * actually serve. A clean stable host (e.g. "6.8", "6.8.2") returns its
+ * major.minor. A pre-release/dev host — any non-numeric suffix such as
+ * -alpha, -beta, -RC or -src, as on trunk — has no released major.minor for
+ * Playground to fetch, so returning a bare "7.1" would point it at an
+ * unreleased version and fail the boot. Map those to 'nightly' instead.
+ *
+ * Tradeoff: 'nightly' mirrors a trunk host but tracks Playground's own
+ * nightly, not the host's exact build; returning '' would instead fall back
+ * to the JS 'latest' (most recent stable). 'nightly' is the truer mirror of
+ * a host on trunk, so prefer it. Unparseable input returns '' to fall back.
+ */
+function playground_wp_version( string $raw ): string {
+	$mm = normalize_version( $raw );
+	if ( '' === $mm ) {
+		return '';
+	}
+	// Stable releases are digits-and-dots only; any other suffix is a dev build.
+	return preg_match( '/^\d+\.\d+(\.\d+)?$/', $raw ) ? $mm : 'nightly';
 }
 
 /**
