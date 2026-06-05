@@ -2,7 +2,9 @@
 /vendor/
 /live-sandbox-editor/build/
 /live-sandbox-editor/vendor/
+/live-sandbox-editor/vendor-prefixed/
 /plugin-repo/
+/dist/
 /wordpress
 *.tsbuildinfo
 /live-sandbox-editor.zip

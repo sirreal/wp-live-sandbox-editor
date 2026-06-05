@@ -1,0 +1,114 @@
+name: Deploy to WordPress.org
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-wporg
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build, check, and deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Guard against non-main dispatch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Deploy must be dispatched from the main branch (got ${{ github.ref }})."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build plugin zip
+        run: bash tools/build-zip.sh
+
+      - name: Verify version consistency
+        id: version
+        run: |
+          header_version="$(grep -oE '^[[:space:]]*\*[[:space:]]*Version:[[:space:]]*[^[:space:]]+' live-sandbox-editor/live-sandbox-editor.php | awk '{print $NF}')"
+          readme_version="$(grep -oE '^Stable tag:[[:space:]]*[^[:space:]]+' live-sandbox-editor/readme.txt | awk '{print $NF}')"
+          echo "Plugin header: $header_version"
+          echo "readme.txt:    $readme_version"
+          if [ -z "$header_version" ] || [ "$header_version" != "$readme_version" ]; then
+            echo "::error::Version mismatch or missing: header='$header_version' readme='$readme_version'."
+            exit 1
+          fi
+          echo "version=$header_version" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure release tag does not already exist
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::Tag $tag already exists; version ${{ steps.version.outputs.version }} was already released. Bump the version before deploying."
+            exit 1
+          fi
+
+      # tools/plugin-check/.wp-env.json mounts the built dist/ tree plus the
+      # Plugin Check plugin, using the project's pinned @wordpress/env.
+      - name: Start wp-env
+        run: ../../node_modules/.bin/wp-env start --auto-port
+        working-directory: tools/plugin-check
+
+      - name: Run Plugin Check on the built artifact
+        working-directory: tools/plugin-check
+        run: |
+          out=$(../../node_modules/.bin/wp-env run cli wp plugin check live-sandbox-editor --require=./wp-content/plugins/plugin-check/cli.php 2>/dev/null)
+          printf '%s\n' "$out"
+          ! printf '%s\n' "$out" | grep -qE '\tERROR\t'
+
+      - name: Deploy to WordPress.org SVN
+        run: bash tools/deploy-wporg.sh
+        env:
+          SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
+          VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Extract changelog section
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          awk -v v="= $version =" '
+            $0 == v { capture = 1; next }
+            capture && /^= / { exit }
+            capture { print }
+          ' live-sandbox-editor/readme.txt > release-notes.md
+          echo "--- release notes ---"
+          cat release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::warning::No changelog section found for $version in readme.txt; the GitHub release will have no notes."
+          fi
+
+      - name: Create git tag and GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          tag="v$version"
+          git tag "$tag"
+          git push origin "$tag"
+          gh release create "$tag" \
+            dist/live-sandbox-editor.zip \
+            --title "$tag" \
+            --notes-file release-notes.md

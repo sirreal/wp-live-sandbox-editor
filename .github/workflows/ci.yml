@@ -53,7 +53,7 @@ jobs:
       - name: Check PHP syntax
         run: |
           find live-sandbox-editor src \
-            -path 'live-sandbox-editor/vendor' -prune -o \
+            -path 'live-sandbox-editor/vendor*' -prune -o \
             -name '*.php' -print0 \
             | xargs -0 -n1 php -l
 
@@ -63,19 +63,46 @@ jobs:
   plugin-check:
     name: Plugin Check
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Run Plugin Check
-        uses: WordPress/plugin-check-action@v1
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
         with:
-          build-dir: ./live-sandbox-editor
-          strict: true
+          node-version: 22
+          cache: npm
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+
+      # Run Plugin Check against the real shipped artifact: tools/build-zip.sh
+      # produces dist/live-sandbox-editor/ with the Strauss-prefixed vendor
+      # tree and dev files pruned. We use the project's pinned @wordpress/env
+      # (tools/plugin-check/.wp-env.json mounts that built tree plus the
+      # Plugin Check plugin) rather than WordPress/plugin-check-action, which
+      # installs the latest wp-env globally at run time and has been failing to
+      # initialize its environment.
+      - name: Install Node dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build plugin zip
+        run: bash tools/build-zip.sh
+
+      - name: Start wp-env
+        run: ../../node_modules/.bin/wp-env start --auto-port
+        working-directory: tools/plugin-check
+
+      - name: Run Plugin Check on the built artifact
+        working-directory: tools/plugin-check
+        run: |
+          out=$(../../node_modules/.bin/wp-env run cli wp plugin check live-sandbox-editor --require=./wp-content/plugins/plugin-check/cli.php 2>/dev/null)
+          printf '%s\n' "$out"
+          ! printf '%s\n' "$out" | grep -qE '\tERROR\t'
 
   e2e:
     name: Playwright E2E
@@ -99,11 +126,14 @@ jobs:
           tools: composer:v2
 
       # The plugin's runtime depends on wp-php-toolkit/reprint-exporter
-      # (see live-sandbox-editor/composer.json) for the sandbox sync
-      # flow. wp-env mounts ../live-sandbox-editor as a plugin, so its
-      # vendor/ must exist before the specs boot Playground.
+      # (see live-sandbox-editor/composer.json) for the sandbox sync flow,
+      # bundled prefixed under vendor-prefixed/. wp-env mounts
+      # ../live-sandbox-editor as a plugin, so that directory must exist
+      # before the specs boot Playground. It is produced by the Strauss
+      # post-install step, so dev dependencies (which include Strauss) must
+      # be installed here — `--no-dev` would skip Strauss and fail.
       - name: Install plugin Composer dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress --no-dev --working-dir=live-sandbox-editor
+        run: composer install --no-interaction --prefer-dist --no-progress --working-dir=live-sandbox-editor
 
       # Cache the Chromium binary in ~/.cache/ms-playwright keyed on the
       # exact @playwright/test version from package-lock.json. Must run
