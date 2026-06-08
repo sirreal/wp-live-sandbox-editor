@@ -20,6 +20,7 @@ namespace Live_Sandbox_Editor;
 \defined( 'ABSPATH' ) || exit;
 
 use Live_Sandbox_Editor_Vendor_FileTreeProducer as FileTreeProducer;
+use Live_Sandbox_Editor_Vendor_WpdbDriverPDO as WpdbDriverPDO;
 use WP_REST_Request;
 use Live_Sandbox_Editor\Vendor\WordPress\DataLiberation\MySQLDumpProducer;
 use function Live_Sandbox_Editor\Vendor\WordPress\Reprint\Exporter\build_pdo_dsn;
@@ -31,7 +32,6 @@ const PLUGIN_FILE = __FILE__;
 
 require_once __DIR__ . '/inc/sync-stream.php';
 require_once __DIR__ . '/inc/manifest.php';
-require_once __DIR__ . '/inc/class-wpdb-pdo-adapter.php';
 require_once __DIR__ . '/inc/test-upgrade.php';
 
 /*
@@ -575,7 +575,7 @@ function rest_sync_db( WP_REST_Request $request ): void {
 			} else {
 				$dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4';
 			}
-			// phpcs:disable WordPress.DB.RestrictedClasses.mysql__PDO -- raw PDO is the preferred dump connection when pdo_mysql is loaded; the wpdb adapter is the fallback for hosts without it.
+			// phpcs:disable WordPress.DB.RestrictedClasses.mysql__PDO -- raw PDO is the preferred dump connection when pdo_mysql is loaded; reprint's WpdbDriverPDO is the fallback for hosts without it.
 			$db = new \PDO(
 				$dsn,
 				DB_USER,
@@ -584,7 +584,7 @@ function rest_sync_db( WP_REST_Request $request ): void {
 			);
 			// phpcs:enable WordPress.DB.RestrictedClasses.mysql__PDO
 		} else {
-			$db = new Wpdb_Pdo_Adapter( $GLOBALS['wpdb'] );
+			$db = new WpdbDriverPDO( $GLOBALS['wpdb'] );
 		}
 	} catch ( \PDOException $e ) {
 		http_response_code( 500 );
