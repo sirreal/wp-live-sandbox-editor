@@ -245,24 +245,33 @@ function playground_php_version( string $raw ): string {
 
 /**
  * Like `normalize_version()` but constrained to WP versions Playground can
- * actually serve. A clean stable host (e.g. "6.8", "6.8.2") returns its
- * major.minor. A pre-release/dev host — any non-numeric suffix such as
- * -alpha, -beta, -RC or -src, as on trunk — has no released major.minor for
- * Playground to fetch, so returning a bare "7.1" would point it at an
- * unreleased version and fail the boot. Map those to 'nightly' instead.
+ * actually serve, mapping the host's `$wp_version` to a `preferredVersions.wp`
+ * value:
  *
- * Tradeoff: 'nightly' mirrors a trunk host but tracks Playground's own
- * nightly, not the host's exact build; returning '' would instead fall back
- * to the JS 'latest' (most recent stable). 'nightly' is the truer mirror of
- * a host on trunk, so prefer it. Unparseable input returns '' to fall back.
+ *   - "6.8" / "6.8.2" (stable, digits-and-dots only) -> "6.8" (major.minor)
+ *   - "6.9-beta1" / "6.9-RC1"                        -> "beta"
+ *   - "6.9-alpha-12345" / "6.9-src" (other dev)      -> "nightly"
+ *   - unparseable                                    -> "" (JS falls back)
+ *
+ * A pre-release/dev host has no released major.minor for Playground to fetch,
+ * so returning a bare "6.9" would point it at an unreleased version and fail
+ * the boot. Playground's "beta" resolves to the most recent Beta/RC of the
+ * active cycle and "nightly" builds from trunk, so each tier mirrors the host
+ * as closely as Playground allows. Unparseable input returns '' so the JS side
+ * falls back to 'latest'.
  */
 function playground_wp_version( string $raw ): string {
 	$mm = normalize_version( $raw );
 	if ( '' === $mm ) {
 		return '';
 	}
-	// Stable releases are digits-and-dots only; any other suffix is a dev build.
-	return preg_match( '/^\d+\.\d+(\.\d+)?$/', $raw ) ? $mm : 'nightly';
+	// Stable releases are digits-and-dots only.
+	if ( preg_match( '/^\d+\.\d+(\.\d+)?$/', $raw ) ) {
+		return $mm;
+	}
+	// Beta/RC of an active cycle (e.g. "6.9-beta1", "6.9-RC1") -> Playground's
+	// "beta"; any other suffix (-alpha, -src) is trunk -> "nightly".
+	return preg_match( '/-(?:beta|rc)\d*/i', $raw ) ? 'beta' : 'nightly';
 }
 
 /**

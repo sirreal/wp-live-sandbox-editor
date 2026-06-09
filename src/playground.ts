@@ -66,10 +66,10 @@ export async function initPlayground(
 		blueprint: {
 			preferredVersions: {
 				// Guarded upstream by `playground_wp_version()`: a stable
-				// host yields its major.minor, a trunk/dev host yields
-				// 'nightly', and unparseable input yields '' (→ 'latest'
-				// here). So we never ask Playground for an unreleased
-				// release number.
+				// host yields its major.minor, a beta/RC host yields
+				// 'beta', a trunk/dev host yields 'nightly', and
+				// unparseable input yields '' (→ 'latest' here). So we
+				// never ask Playground for an unreleased release number.
 				wp: wpVersion || 'latest',
 				// Playground's blueprint types `php` as a strict union of
 				// supported versions; we coerce here because the host's
