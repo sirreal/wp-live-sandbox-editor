@@ -175,8 +175,10 @@ function app_data( array $data ): array {
 		// Major.minor only — Playground's blueprint `preferredVersions`
 		// accepts that shape plus 'latest'/'beta'/'nightly', not full
 		// patches. Sandbox boots on the host's WP+PHP series so admin
-		// chrome, list-table HTML, and available APIs match.
-		'wpVersion'      => normalize_version( $GLOBALS['wp_version'] ?? '' ),
+		// chrome, list-table HTML, and available APIs match. A host on
+		// trunk maps to 'nightly' (see playground_wp_version) rather than
+		// an unreleased major.minor Playground can't serve.
+		'wpVersion'      => playground_wp_version( $GLOBALS['wp_version'] ?? '' ),
 		'phpVersion'     => playground_php_version( PHP_VERSION ),
 		// JS consumers (pre-sync cleanup) need to know LSE's own
 		// directory name so they don't prune it. SLUG is the canonical
@@ -239,6 +241,37 @@ function playground_php_version( string $raw ): string {
 	$mm      = normalize_version( $raw );
 	$allowed = array( '7.0', '7.1', '7.2', '7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4' );
 	return in_array( $mm, $allowed, true ) ? $mm : '';
+}
+
+/**
+ * Like `normalize_version()` but constrained to WP versions Playground can
+ * actually serve, mapping the host's `$wp_version` to a `preferredVersions.wp`
+ * value:
+ *
+ *   - "6.8" / "6.8.2" (stable, digits-and-dots only) -> "6.8" (major.minor)
+ *   - "6.9-beta1" / "6.9-RC1"                        -> "beta"
+ *   - "6.9-alpha-12345" / "6.9-src" (other dev)      -> "nightly"
+ *   - unparseable                                    -> "" (JS falls back)
+ *
+ * A pre-release/dev host has no released major.minor for Playground to fetch,
+ * so returning a bare "6.9" would point it at an unreleased version and fail
+ * the boot. Playground's "beta" resolves to the most recent Beta/RC of the
+ * active cycle and "nightly" builds from trunk, so each tier mirrors the host
+ * as closely as Playground allows. Unparseable input returns '' so the JS side
+ * falls back to 'latest'.
+ */
+function playground_wp_version( string $raw ): string {
+	$mm = normalize_version( $raw );
+	if ( '' === $mm ) {
+		return '';
+	}
+	// Stable releases are digits-and-dots only.
+	if ( preg_match( '/^\d+\.\d+(\.\d+)?$/', $raw ) ) {
+		return $mm;
+	}
+	// Beta/RC of an active cycle (e.g. "6.9-beta1", "6.9-RC1") -> Playground's
+	// "beta"; any other suffix (-alpha, -src) is trunk -> "nightly".
+	return preg_match( '/-(?:beta|rc)\d*/i', $raw ) ? 'beta' : 'nightly';
 }
 
 /**

@@ -129,9 +129,8 @@ jobs:
       # (see live-sandbox-editor/composer.json) for the sandbox sync flow,
       # bundled prefixed under vendor-prefixed/. wp-env mounts
       # ../live-sandbox-editor as a plugin, so that directory must exist
-      # before the specs boot Playground. It is produced by the Strauss
-      # post-install step, so dev dependencies (which include Strauss) must
-      # be installed here — `--no-dev` would skip Strauss and fail.
+      # before the specs boot Playground. The plugin's composer post-install
+      # hook produces it via tools/strauss.sh (downloaded Strauss phar).
       - name: Install plugin Composer dependencies
         run: composer install --no-interaction --prefer-dist --no-progress --working-dir=live-sandbox-editor
 

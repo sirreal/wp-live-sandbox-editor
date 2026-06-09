@@ -65,13 +65,17 @@ export async function initPlayground(
 		remoteUrl: 'https://playground.wordpress.net/remote.html',
 		blueprint: {
 			preferredVersions: {
+				// Guarded upstream by `playground_wp_version()`: a stable
+				// host yields its major.minor, a beta/RC host yields
+				// 'beta', a trunk/dev host yields 'nightly', and
+				// unparseable input yields '' (→ 'latest' here). So we
+				// never ask Playground for an unreleased release number.
 				wp: wpVersion || 'latest',
 				// Playground's blueprint types `php` as a strict union of
 				// supported versions; we coerce here because the host's
-				// `major.minor` is validated upstream by the regex in
-				// `Live_Sandbox_Editor\normalize_version()` — anything
-				// outside Playground's supported set will surface as a
-				// boot error the user can react to.
+				// `major.minor` is constrained upstream to an allowlist by
+				// `Live_Sandbox_Editor\playground_php_version()`, which
+				// returns '' (→ '8.2' here) for anything off-list.
 				php: (phpVersion || '8.2') as BlueprintPHPVersion | 'latest',
 			},
 			steps: [{ step: 'login', username: 'admin', password: 'password' }],
