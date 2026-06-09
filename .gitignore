@@ -3,6 +3,8 @@
 /live-sandbox-editor/build/
 /live-sandbox-editor/vendor/
 /live-sandbox-editor/vendor-prefixed/
+# Strauss phar, downloaded on demand by tools/strauss.sh.
+/.bin/
 /plugin-repo/
 /dist/
 /wordpress

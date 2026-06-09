@@ -6,16 +6,13 @@
 		"php": ">=7.4",
 		"wp-php-toolkit/reprint-exporter": "^0.1.45"
 	},
-	"require-dev": {
-		"brianhenryie/strauss": "^0.27"
-	},
 	"config": {
 		"platform": {
 			"php": "8.3"
 		}
 	},
 	"scripts": {
-		"strauss": ["@php vendor/bin/strauss"],
+		"strauss": ["bash ../tools/strauss.sh"],
 		"post-install-cmd": ["@strauss"],
 		"post-update-cmd": ["@strauss"]
 	},

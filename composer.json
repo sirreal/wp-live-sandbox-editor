@@ -14,7 +14,7 @@
 		"lint:src": "phpcs --standard=phpcs.xml src/"
 	},
 	"scripts-descriptions": {
-		"install-plugin-vendor": "Install the live-sandbox-editor plugin's runtime dependencies (from live-sandbox-editor/plugin-composer.json) into live-sandbox-editor/vendor/. Runs automatically after every composer install/update at the repo root.",
+		"install-plugin-vendor": "Install the live-sandbox-editor plugin's runtime dependencies. The plugin's own composer post-install hook then runs tools/strauss.sh (downloading the pinned Strauss phar to .bin/ on demand) to generate the prefixed live-sandbox-editor/vendor-prefixed/. Runs automatically after every composer install/update at the repo root.",
 		"lint:src": "Run phpcs against src/ only (the Playground-bundled PHP library). Mirrors the CI step; leaves plugin code untouched."
 	},
 	"config": {
