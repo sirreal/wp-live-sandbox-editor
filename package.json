@@ -40,7 +40,7 @@
 	"author": "sirreal",
 	"license": "GPL-2.0-or-later",
 	"dependencies": {
-		"@wp-playground/client": "^3.1.30",
+		"@wp-playground/client": "^3.1.38",
 		"monaco-editor": "^0.55.1"
 	},
 	"devDependencies": {
