@@ -13,7 +13,10 @@
 # installed: composer install --working-dir=live-sandbox-editor.
 set -euo pipefail
 
-strauss_version="0.27.2"
+# 0.27.3 minimum: 0.27.2's bundled Composer rejects the new GitHub Actions
+# token format ("contains invalid characters"), failing CI jobs whose runner
+# token happens to use it.
+strauss_version="0.27.3"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Version-stamped filename so bumping strauss_version triggers a fresh download
 # instead of silently reusing a stale phar.
@@ -28,4 +31,6 @@ if [ ! -f "$phar" ]; then
 fi
 
 echo "==> Prefixing bundled dependencies into vendor-prefixed/"
-( cd "$plugin_dir" && php "$phar" --no-interaction )
+# Strauss 0.27.3 parses bundled sources with php-parser and exceeds a default
+# 128M memory_limit on this dependency tree.
+( cd "$plugin_dir" && php -d memory_limit=-1 "$phar" --no-interaction )
