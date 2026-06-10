@@ -45,7 +45,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.15",
-		"@playwright/test": "^1.59.1",
+		"@playwright/test": "^1.60.0",
 		"@tsconfig/strictest": "^2.0.5",
 		"@wordpress/env": "^11.5.0",
 		"@wordpress/interactivity": "^6.46.0",
