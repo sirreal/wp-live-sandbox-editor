@@ -44,7 +44,7 @@
 		"monaco-editor": "^0.55.1"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.15",
+		"@biomejs/biome": "^2.4.16",
 		"@playwright/test": "^1.60.0",
 		"@tsconfig/strictest": "^2.0.5",
 		"@wordpress/env": "^11.8.0",
